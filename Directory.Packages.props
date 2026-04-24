@@ -26,8 +26,8 @@
     <PackageVersion Include="Microsoft.IdentityModel.Tokens" Version="8.17.0" />
     <PackageVersion Include="Microsoft.IdentityModel.Validators" Version="8.17.0" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
-    <PackageVersion Include="Azure.Security.KeyVault.Certificates" Version="4.7.0" />
-    <PackageVersion Include="Azure.Security.KeyVault.Secrets" Version="4.7.0" />
+    <PackageVersion Include="Azure.Security.KeyVault.Certificates" Version="4.8.0" />
+    <PackageVersion Include="Azure.Security.KeyVault.Secrets" Version="4.10.0" />
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.7" />
   </ItemGroup>
 
