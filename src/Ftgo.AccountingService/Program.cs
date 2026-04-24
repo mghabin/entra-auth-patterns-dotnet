@@ -20,7 +20,12 @@ builder.Services.Configure<DownstreamApiOptions>(
 
 builder.Services.AddEntraAuthTelemetry("Ftgo.AccountingService");
 builder.Services.AddEntraAuthDownstreamApi();
-builder.Services.AddSingleton<IAppTokenProvider, CertificateTokenProvider>();
+
+// CertificateTokenProvider must be registered as a hosted service so its async cert load
+// runs before DownstreamProbeService (hosted services start in registration order).
+builder.Services.AddSingleton<CertificateTokenProvider>();
+builder.Services.AddSingleton<IAppTokenProvider>(sp => sp.GetRequiredService<CertificateTokenProvider>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CertificateTokenProvider>());
 builder.Services.AddHostedService<DownstreamProbeService>();
 
 await builder.Build().RunAsync();

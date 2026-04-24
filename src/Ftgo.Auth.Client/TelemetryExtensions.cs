@@ -9,6 +9,8 @@ namespace Ftgo.Auth;
 /// Wires OpenTelemetry traces + metrics with the defaults this sample cares about.
 /// The OTLP exporter is active only when <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is set,
 /// so local runs without a collector don't fail.
+/// This variant does NOT take a dependency on Microsoft.AspNetCore.App so it is safe
+/// for worker processes; web hosts should call <c>AddEntraAuthWebTelemetry</c> instead.
 /// </summary>
 public static class TelemetryExtensions
 {
@@ -27,14 +29,12 @@ public static class TelemetryExtensions
             .ConfigureResource(r => r.AddService(serviceName))
             .WithTracing(t =>
             {
-                t.AddAspNetCoreInstrumentation()
-                 .AddHttpClientInstrumentation();
+                t.AddHttpClientInstrumentation();
                 if (hasOtlp) t.AddOtlpExporter();
             })
             .WithMetrics(m =>
             {
-                m.AddAspNetCoreInstrumentation()
-                 .AddHttpClientInstrumentation()
+                m.AddHttpClientInstrumentation()
                  .AddRuntimeInstrumentation();
                 if (hasOtlp) m.AddOtlpExporter();
             });

@@ -56,18 +56,15 @@ internal sealed class RequireClientAppHandler(IOptionsMonitor<EntraAuthOptions> 
 }
 
 /// <summary>
-/// Attribute sugar for <see cref="RequireClientAppRequirement"/> — puts on a controller/action:
-/// <c>[RequireClientApp]</c> uses the configured allow-list; <c>[RequireClientApp("app-id-1", ...)]</c>
-/// pins a per-endpoint list.
+/// Attribute sugar for the <c>EntraAuth:RequireClientApp</c> authorization policy.
+/// Place on a controller or action: <c>[RequireClientApp]</c>. The allow-list is
+/// resolved from <see cref="EntraAuthOptions.AllowedClientApps"/>; per-endpoint
+/// pinning is intentionally not supported here to keep the policy single-sourced.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
-public sealed class RequireClientAppAttribute : Attribute, IAuthorizeData
+public sealed class RequireClientAppAttribute : AuthorizeAttribute
 {
-    public string? Policy { get; set; } = ClientAppPolicy.Name;
-
-    public string? Roles { get; set; }
-
-    public string? AuthenticationSchemes { get; set; }
+    public RequireClientAppAttribute() : base(ClientAppPolicy.Name) { }
 }
 
 internal static class ClientAppPolicy

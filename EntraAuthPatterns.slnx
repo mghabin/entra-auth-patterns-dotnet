@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Ftgo.Auth.Client/Ftgo.Auth.Client.csproj" />
     <Project Path="src/Ftgo.Auth/Ftgo.Auth.csproj" />
     <Project Path="src/Ftgo.ApiGateway/Ftgo.ApiGateway.csproj" />
     <Project Path="src/Ftgo.OrderService/Ftgo.OrderService.csproj" />

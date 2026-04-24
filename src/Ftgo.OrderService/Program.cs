@@ -2,7 +2,7 @@ using Ftgo.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEntraAuth(builder.Configuration);
-builder.Services.AddEntraAuthTelemetry("Ftgo.OrderService");
+builder.Services.AddEntraAuthWebTelemetry("Ftgo.OrderService");
 builder.Services.AddEntraAuthProblemDetails();
 builder.Services.AddControllers();
 

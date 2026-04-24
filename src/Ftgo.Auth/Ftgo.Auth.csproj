@@ -1,15 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <InternalsVisibleTo Include="Ftgo.Auth.Tests" />
-    <!-- JwtBearer, Extensions.Http, Extensions.Options.DataAnnotations already ship with Microsoft.AspNetCore.App -->
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <ProjectReference Include="..\Ftgo.Auth.Client\Ftgo.Auth.Client.csproj" />
     <PackageReference Include="Microsoft.Identity.Web" />
     <PackageReference Include="Microsoft.Identity.Web.DownstreamApi" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="Microsoft.IdentityModel.Validators" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

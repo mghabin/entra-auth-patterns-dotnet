@@ -17,7 +17,7 @@ internal sealed class ManagedIdentityTokenProvider(IOptions<ManagedIdentityOptio
 {
     private readonly TokenCredential _credential =
         string.IsNullOrWhiteSpace(options.Value.UserAssignedClientId)
-            ? new ManagedIdentityCredential()
+            ? new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned)
             : new ManagedIdentityCredential(
                 ManagedIdentityId.FromUserAssignedClientId(options.Value.UserAssignedClientId));
 
