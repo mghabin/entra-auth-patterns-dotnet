@@ -1,0 +1,12 @@
+services:
+  aspire-dashboard:
+    # OSS, free. OTLP receiver + dashboard for traces/metrics/logs.
+    # https://learn.microsoft.com/dotnet/aspire/fundamentals/dashboard/standalone
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: ftgo-aspire-dashboard
+    ports:
+      - "18888:18888"   # web UI
+      - "4317:18889"    # OTLP/gRPC receiver
+    environment:
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    restart: unless-stopped

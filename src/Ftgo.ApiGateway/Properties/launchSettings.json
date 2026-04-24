@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Ftgo.ApiGateway": {
+      "commandName": "Project",
+      "applicationUrl": "https://localhost:7101;http://localhost:5101",
+      "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" }
+    }
+  }
+}

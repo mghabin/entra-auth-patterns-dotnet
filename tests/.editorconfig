@@ -1,0 +1,5 @@
+# Test conventions — underscores in test method names are idiomatic; InMemory collection uses defaults.
+[*.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.MA0002.severity = none
+dotnet_diagnostic.CA2007.severity = none

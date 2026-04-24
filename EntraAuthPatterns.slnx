@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ftgo.Auth/Ftgo.Auth.csproj" />
+    <Project Path="src/Ftgo.ApiGateway/Ftgo.ApiGateway.csproj" />
+    <Project Path="src/Ftgo.OrderService/Ftgo.OrderService.csproj" />
+    <Project Path="src/Ftgo.RestaurantService/Ftgo.RestaurantService.csproj" />
+    <Project Path="src/Ftgo.KitchenService/Ftgo.KitchenService.csproj" />
+    <Project Path="src/Ftgo.AccountingService/Ftgo.AccountingService.csproj" />
+    <Project Path="src/Ftgo.DeliveryService/Ftgo.DeliveryService.csproj" />
+    <Project Path="src/Ftgo.NotificationService/Ftgo.NotificationService.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ftgo.Auth.Tests/Ftgo.Auth.Tests.csproj" />
+  </Folder>
+</Solution>
