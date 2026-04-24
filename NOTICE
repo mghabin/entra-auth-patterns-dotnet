@@ -1,0 +1,31 @@
+EntraAuthPatterns
+Copyright (c) 2026 mghabin
+Licensed under the MIT License (see LICENSE).
+
+This sample depends on third-party open-source packages restored at build
+time via NuGet. Each retains its own copyright and license; the most
+notable runtime dependencies are:
+
+- Microsoft.Identity.Web, Microsoft.Identity.Client
+    © Microsoft Corporation — MIT License
+- Microsoft.AspNetCore.Authentication.JwtBearer
+    © .NET Foundation and Contributors — MIT License
+- Microsoft.Extensions.* (Hosting, Options, Configuration, Logging,
+  DependencyInjection, Http.Resilience)
+    © .NET Foundation and Contributors — MIT License
+- Azure.Identity, Azure.Security.KeyVault.Certificates,
+  Azure.Security.KeyVault.Secrets, Azure.Core
+    © Microsoft Corporation — MIT License
+- OpenTelemetry, OpenTelemetry.Extensions.Hosting,
+  OpenTelemetry.Instrumentation.AspNetCore,
+  OpenTelemetry.Instrumentation.Http
+    © The OpenTelemetry Authors — Apache License 2.0
+- xUnit.net (xunit.v3, xunit.runner.visualstudio)  — Apache License 2.0
+- Shouldly — BSD-3-Clause
+- NSubstitute — BSD-3-Clause
+- coverlet.collector — MIT License
+
+For the full, authoritative license text of a given package, see the
+package's own repository or the `licenses/` folder produced by NuGet
+during restore. The exact resolved versions for each project are pinned
+in its `packages.lock.json`.
