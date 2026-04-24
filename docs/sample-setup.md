@@ -26,7 +26,7 @@ auth shapes are taught against recognisable, business-meaningful names.
 Create seven app registrations (the `scripts/setup-entra.{ps1,sh}` helpers
 do this idempotently — see `run-locally.md`):
 
-1. **ftgo-apigateway** (single-tenant) — exposes scope `orders.read`.
+1. **ftgo-apigateway** (single-tenant) — consumes the `orders.read` delegated scope on behalf of users.
 2. **ftgo-orderservice** (single-tenant) — exposes scope `orders.read` and app role `Orders.Process`.
 3. **ftgo-restaurantservice** (multi-tenant, `signInAudience: AzureADMultipleOrgs`) — exposes app role `Restaurants.Read.All`.
 4. **ftgo-kitchenservice** (single-tenant, optional) — only needed if running outside Azure; in Azure the identity is a **Managed Identity**.

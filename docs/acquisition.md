@@ -29,7 +29,7 @@ var cred = new ManagedIdentityCredential();
 var cred = new ManagedIdentityCredential(
     ManagedIdentityId.FromUserAssignedClientId("<client-id>"));
 
-var blob = new BlobServiceClient(new Uri("https://acct.blob.core.windows.net"), cred);
+var blob = new BlobServiceClient(new Uri("https://<storage>.blob.core.windows.net"), cred);
 ```
 
 **Calling your own protected Web API with MI** — you need an actual JWT, two options:

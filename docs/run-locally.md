@@ -71,7 +71,7 @@ curl -k -H "Authorization: Bearer $TOKEN" https://localhost:7101/api/checkout/vi
 | Worker                       | How to run for free                                                                 |
 |------------------------------|--------------------------------------------------------------------------------------|
 | **Ftgo.KitchenService** (MI) | Locally `az login` makes `DefaultAzureCredential` work; in production this is MI.   |
-| **Ftgo.AccountingService** (cert) | `scripts/new-cert.sh` already created the .pfx and uploaded the public key. The worker reads it from Key Vault in prod; for local you can wire it to a file path via user-secrets. |
+| **Ftgo.AccountingService** (cert) | `scripts/new-cert.sh` creates the .pfx and uploads the public key. In prod the worker reads it from Key Vault via managed identity; for local dev set `KeyVault:LocalPfxPath` (and optionally `KeyVault:LocalPfxPassword`) in user-secrets to point at the .pfx — Key Vault is then bypassed entirely. |
 | **Ftgo.DeliveryService** (FIC)   | Run the GitHub Actions workflow `.github/workflows/wi-demo.yml` — it logs in via OIDC and acquires a token, no secret. |
 | **Ftgo.NotificationService** (secret) | `dotnet user-secrets set` the secret. Included as the **anti-pattern** for contrast — don't adopt this in real systems. |
 
