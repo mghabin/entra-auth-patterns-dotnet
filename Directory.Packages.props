@@ -41,8 +41,8 @@
   </ItemGroup>
 
   <ItemGroup Label="Analyzers">
-    <PackageVersion Include="Meziantou.Analyzer" Version="2.0.187" />
-    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.4.0.108396" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.52" />
+    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.24.0.138807" />
   </ItemGroup>
 
   <ItemGroup Label="Testing">
