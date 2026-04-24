@@ -15,13 +15,27 @@ internal sealed class AzureAdOptions
 
 internal sealed class KeyVaultCertOptions
 {
-    [Required, Url] public string Uri { get; init; } = string.Empty;
-    [Required] public string CertName { get; init; } = string.Empty;
+    [Url] public string? Uri { get; init; }
+
+    public string? CertName { get; init; }
 
     /// <summary>
     /// Optional user-assigned managed identity client ID. Leave empty to use system-assigned MI.
     /// </summary>
     public string? ManagedIdentityClientId { get; init; }
+
+    /// <summary>
+    /// Optional path to a local PFX file. When set, the certificate is loaded from disk and
+    /// Key Vault is bypassed entirely — useful for local development without a Key Vault.
+    /// In production this should be left null so the cert is pulled from Key Vault using
+    /// managed identity.
+    /// </summary>
+    public string? LocalPfxPath { get; init; }
+
+    /// <summary>
+    /// Optional passphrase for <see cref="LocalPfxPath"/>. Empty string is treated as no passphrase.
+    /// </summary>
+    public string? LocalPfxPassword { get; init; }
 }
 
 /// <summary>
@@ -50,20 +64,9 @@ internal sealed partial class CertificateTokenProvider : IAppTokenProvider, IHos
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        var credential = string.IsNullOrWhiteSpace(_kv.Value.ManagedIdentityClientId)
-            ? new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned)
-            : new ManagedIdentityCredential(
-                ManagedIdentityId.FromUserAssignedClientId(_kv.Value.ManagedIdentityClientId));
-
-        var certClient = new CertificateClient(new Uri(_kv.Value.Uri), credential);
-        var downloaded = await certClient.DownloadCertificateAsync(
-            new DownloadCertificateOptions(_kv.Value.CertName)
-            {
-                KeyStorageFlags = X509KeyStorageFlags.EphemeralKeySet,
-            },
-            cancellationToken).ConfigureAwait(false);
-
-        _certificate = downloaded.Value;
+        _certificate = !string.IsNullOrWhiteSpace(_kv.Value.LocalPfxPath)
+            ? LoadFromLocalPfx(_kv.Value)
+            : await LoadFromKeyVaultAsync(_kv.Value, cancellationToken).ConfigureAwait(false);
 
         _app = ConfidentialClientApplicationBuilder
             .Create(_aad.Value.ClientId)
@@ -71,7 +74,41 @@ internal sealed partial class CertificateTokenProvider : IAppTokenProvider, IHos
             .WithCertificate(_certificate)
             .Build();
 
-        LogCertLoaded(_kv.Value.CertName);
+        LogCertLoaded(_kv.Value.LocalPfxPath ?? _kv.Value.CertName ?? string.Empty);
+    }
+
+    private static X509Certificate2 LoadFromLocalPfx(KeyVaultCertOptions kv)
+    {
+        var path = kv.LocalPfxPath!;
+        var bytes = File.ReadAllBytes(path);
+        return X509CertificateLoader.LoadPkcs12(
+            bytes,
+            kv.LocalPfxPassword,
+            X509KeyStorageFlags.EphemeralKeySet);
+    }
+
+    private static async Task<X509Certificate2> LoadFromKeyVaultAsync(KeyVaultCertOptions kv, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(kv.Uri) || string.IsNullOrWhiteSpace(kv.CertName))
+        {
+            throw new InvalidOperationException(
+                "KeyVault:Uri and KeyVault:CertName are required when KeyVault:LocalPfxPath is not set.");
+        }
+
+        var credential = string.IsNullOrWhiteSpace(kv.ManagedIdentityClientId)
+            ? new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned)
+            : new ManagedIdentityCredential(
+                ManagedIdentityId.FromUserAssignedClientId(kv.ManagedIdentityClientId));
+
+        var certClient = new CertificateClient(new Uri(kv.Uri), credential);
+        var downloaded = await certClient.DownloadCertificateAsync(
+            new DownloadCertificateOptions(kv.CertName)
+            {
+                KeyStorageFlags = X509KeyStorageFlags.EphemeralKeySet,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return downloaded.Value;
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

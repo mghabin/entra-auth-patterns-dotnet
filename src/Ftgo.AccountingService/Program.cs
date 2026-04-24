@@ -13,6 +13,10 @@ builder.Services
     .AddOptions<KeyVaultCertOptions>()
     .Bind(builder.Configuration.GetSection("KeyVault"))
     .ValidateDataAnnotations()
+    .Validate(
+        kv => !string.IsNullOrWhiteSpace(kv.LocalPfxPath)
+              || (!string.IsNullOrWhiteSpace(kv.Uri) && !string.IsNullOrWhiteSpace(kv.CertName)),
+        "KeyVault must set either LocalPfxPath (local dev) OR both Uri and CertName (Key Vault).")
     .ValidateOnStart();
 
 builder.Services.Configure<DownstreamApiOptions>(
