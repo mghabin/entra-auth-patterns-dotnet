@@ -40,7 +40,16 @@ jobs:
         run: dotnet build EntraAuthPatterns.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test EntraAuthPatterns.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test EntraAuthPatterns.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: ./TestResults/**/coverage.cobertura.xml
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Format check
         run: dotnet format EntraAuthPatterns.slnx --verify-no-changes --no-restore --severity warn
