@@ -9,6 +9,15 @@ namespace Ftgo.Auth;
 /// </summary>
 public interface IAppTokenProvider
 {
+    /// <summary>
+    /// Acquires an app-only access token for the supplied scope.
+    /// </summary>
+    /// <param name="scope">
+    /// Fully-qualified resource scope (typically <c>{api-app-id-uri}/.default</c> for
+    /// client-credentials flows). Must not be null or empty.
+    /// </param>
+    /// <param name="cancellationToken">Token to cancel the underlying credential call.</param>
+    /// <returns>A bearer access token suitable for the <c>Authorization</c> header.</returns>
     ValueTask<string> GetAccessTokenAsync(string scope, CancellationToken cancellationToken);
 }
 
