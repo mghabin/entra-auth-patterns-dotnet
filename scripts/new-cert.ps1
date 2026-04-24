@@ -24,7 +24,15 @@ Export-Certificate    -Cert $cert -FilePath $cer | Out-Null
 $appId = az ad app list --display-name $AppName --query '[0].appId' -o tsv
 if (-not $appId) { throw "App '$AppName' not found — run setup-entra.ps1 first." }
 
-az ad app credential reset --id $appId --cert "@$cer" --append | Out-Null
+$thumb = $cert.Thumbprint.ToLower()
+$existing = az ad app credential list --id $appId `
+    --query "[?customKeyIdentifier!=null] | [?ends_with(tolower(customKeyIdentifier), '$thumb')]" -o tsv
+
+if ($existing) {
+    Write-Host "==> Cert with thumbprint $thumb already attached to $AppName — skipping upload."
+} else {
+    az ad app credential reset --id $appId --cert "@$cer" --append | Out-Null
+}
 
 Write-Host "PFX:        $pfx"
 Write-Host "Thumbprint: $($cert.Thumbprint.ToLower())"
