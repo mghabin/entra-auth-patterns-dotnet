@@ -9,7 +9,7 @@
     <PackageReference Include="Microsoft.Identity.Client" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Ftgo.Auth\Ftgo.Auth.csproj" />
+    <ProjectReference Include="..\Ftgo.Auth.Client\Ftgo.Auth.Client.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="appsettings.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></None>

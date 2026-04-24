@@ -28,11 +28,13 @@ public sealed partial class DownstreamProbeService(
         {
             // Graceful shutdown — nothing to do.
         }
-        catch (HttpRequestException ex)
+#pragma warning disable CA1031 // Probe is the entire purpose of this BackgroundService; we surface failures via exit code + logs and must not let the host crash silently.
+        catch (Exception ex)
         {
-            LogHttpFailure(logger, ex);
+            LogProbeFailure(logger, ex);
             Environment.ExitCode = 1;
         }
+#pragma warning restore CA1031
         finally
         {
             lifetime.StopApplication();
@@ -44,6 +46,6 @@ public sealed partial class DownstreamProbeService(
     private static partial void LogResult(ILogger logger, int status, string body);
 
     [LoggerMessage(EventId = 3001, Level = LogLevel.Error,
-        Message = "Probe HTTP failure")]
-    private static partial void LogHttpFailure(ILogger logger, Exception ex);
+        Message = "Probe failure")]
+    private static partial void LogProbeFailure(ILogger logger, Exception ex);
 }
