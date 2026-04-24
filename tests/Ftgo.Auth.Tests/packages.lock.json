@@ -840,20 +840,20 @@
       },
       "Azure.Security.KeyVault.Certificates": {
         "type": "CentralTransitive",
-        "requested": "[4.7.0, )",
-        "resolved": "4.7.0",
-        "contentHash": "FcoGTI/6i8nKZhwI0HrYnVWOQk9LhnP+9T3adFAGvU8i3XPc3KKJ93VGER8L+Ygez2bpyGsWj4fRjsYv2211PQ==",
+        "requested": "[4.8.0, )",
+        "resolved": "4.8.0",
+        "contentHash": "48EHvsZM0hQow0PP4PAkWZYcE/tmjfx7az07GrqU2Q/0p3O3Vm/F+bEu1iVREBYzSV7uHHPikyJyBnXClfKuJA==",
         "dependencies": {
-          "Azure.Core": "1.44.1"
+          "Azure.Core": "1.46.2"
         }
       },
       "Azure.Security.KeyVault.Secrets": {
         "type": "CentralTransitive",
-        "requested": "[4.7.0, )",
-        "resolved": "4.7.0",
-        "contentHash": "uOPCojkm41V4dKTORyGzl3/f/lriKpxSQ43fWDn4StRJBVmbF1F/DNWJhwm207kCnqgE/W9+tskJSimIKHCZkw==",
+        "requested": "[4.10.0, )",
+        "resolved": "4.10.0",
+        "contentHash": "lcJtcgTkk1gGy59RQhGLJLMyad+zgASMn975PVjMft69q+jjFTo6Nyq5SCtOhPY1WvA0gNI1qYIVN2oikVXDjw==",
         "dependencies": {
-          "Azure.Core": "1.44.1"
+          "Azure.Core": "1.53.0"
         }
       },
       "Microsoft.AspNetCore.Authentication.JwtBearer": {
