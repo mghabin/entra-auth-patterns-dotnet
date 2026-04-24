@@ -31,8 +31,9 @@ and should not be copied into production code:
 - `Ftgo.NotificationService` uses a **client secret** — the worst
   credential type. The file documents why and points at better options.
 - Some package versions may carry `NU1902`/`NU1903` advisories; these
-  surface as build warnings on purpose so they're visible. See
-  `docs/dotnet/checklist.md` for the rotation policy.
+  surface as build warnings on purpose so they're visible. See the
+  [dotnet-engineering-guide checklist](https://github.com/mghabin/dotnet-engineering-guide/blob/main/checklist.md)
+  for the rotation policy.
 
 ## What we do guarantee
 
