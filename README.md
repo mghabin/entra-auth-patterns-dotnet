@@ -50,8 +50,13 @@ Full free-tier walkthrough → [`docs/run-locally.md`](docs/run-locally.md).
 - [Sample setup](docs/sample-setup.md) — Entra app registrations, role grants, projects under `src/`.
 - [Run locally (free)](docs/run-locally.md) — bootstrap on just your existing GitHub + Entra tenant.
 
-### .NET 10 best practices applied in `src/`
-- [.NET best practices](docs/dotnet/README.md) — index (foundations, ASP.NET Core, data, testing, performance, cloud-native, client, monorepo + anti-patterns, checklist).
+### .NET engineering practices applied in `src/`
+
+The general .NET / ASP.NET Core / monorepo guidance that `src/` follows lives in
+its own repo so it can be read on its own:
+👉 **[mghabin/dotnet-engineering-guide](https://github.com/mghabin/dotnet-engineering-guide)**
+— foundations, ASP.NET Core, data, testing, performance, cloud-native, client,
+monorepo + anti-patterns, and a one-page review checklist.
 
 ## Decision tree
 
