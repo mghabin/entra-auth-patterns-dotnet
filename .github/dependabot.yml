@@ -1,0 +1,42 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      microsoft-identity:
+        patterns:
+          - "Microsoft.Identity.*"
+          - "Microsoft.IdentityModel.*"
+      aspnetcore:
+        patterns:
+          - "Microsoft.AspNetCore.*"
+          - "Microsoft.Extensions.*"
+      opentelemetry:
+        patterns:
+          - "OpenTelemetry.*"
+      azure:
+        patterns:
+          - "Azure.*"
+      analyzers:
+        patterns:
+          - "Meziantou.Analyzer"
+          - "SonarAnalyzer.*"
+      test:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "NSubstitute"
+          - "Shouldly"
+          - "Microsoft.AspNetCore.Mvc.Testing"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
