@@ -4,9 +4,9 @@
     "net10.0": {
       "Meziantou.Analyzer": {
         "type": "Direct",
-        "requested": "[2.0.187, )",
-        "resolved": "2.0.187",
-        "contentHash": "s35YCC7rnWZnxtpdihrkdrGSAuzhdc+1kUMmO+UgVoogw3HAMmPO9BrSkxfU/KwhncK0Hr+nHFuAqOl+mGS01Q=="
+        "requested": "[3.0.52, )",
+        "resolved": "3.0.52",
+        "contentHash": "hgDgjAG6uXslUO/Q5X+leh5Oqzo9iQyr4C+4qJUFfeyNH03AN3USo9mWhJX8nFgSM+CNLV6DCkY17dxcNZZ3FA=="
       },
       "Microsoft.Extensions.Hosting": {
         "type": "Direct",
@@ -124,9 +124,9 @@
       },
       "SonarAnalyzer.CSharp": {
         "type": "Direct",
-        "requested": "[10.4.0.108396, )",
-        "resolved": "10.4.0.108396",
-        "contentHash": "xGcLZ+dvkVuBbd3sjPur9X+1owSL/iDoxVFJLhMx3/vq1fmoKM2fwvrZ8ReAas6l715GJ/dWU2ckwlrRVopmbg=="
+        "requested": "[10.24.0.138807, )",
+        "resolved": "10.24.0.138807",
+        "contentHash": "+ZEa1+KhNSulMSatpffgHnovbLGtYL9oukMh8uQp8RBDnPOjEFzvECSa4kfu1D4PJxErksiGOQQ+kDeao1x9jQ=="
       },
       "Microsoft.Extensions.AmbientMetadata.Application": {
         "type": "Transitive",
