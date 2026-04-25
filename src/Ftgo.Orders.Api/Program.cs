@@ -3,7 +3,7 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEntraAuth(builder.Configuration);
-builder.Services.AddEntraAuthWebTelemetry("Ftgo.RestaurantService");
+builder.Services.AddEntraAuthWebTelemetry("Ftgo.Orders.Api");
 builder.Services.AddEntraAuthProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();

@@ -1,5 +1,5 @@
 metadata name = 'app-registrations'
-metadata description = 'Provisions the 7 FTGO app registrations + service principals and exposes deterministic scope/role IDs.'
+metadata description = 'Provisions the 3 FTGO Entra app registrations + service principals (BFF, Orders API, Restaurants API) and exposes deterministic scope/role IDs. Workers run as Managed Identity and do not need their own app reg.'
 
 // Scope/role IDs are deterministic GUIDs of (tenantId, app, value) so callers' references survive re-deploys.
 
@@ -11,28 +11,21 @@ targetScope = 'tenant'
 @maxLength(36)
 param tenantId string
 
-@description('Prefix applied to every app registration display name (e.g. "ftgo" → "ftgo-orderservice"). When called from the cloud envs the orchestrator passes "ftgo-{env}".')
+@description('Prefix applied to every app registration display name (e.g. "ftgo-dev" → "ftgo-dev-orders-api"). Cloud envs pass "ftgo-{env}".')
 @minLength(2)
 @maxLength(24)
 param prefix string
 
-@description('OIDC redirect URI registered on the BFF (api gateway) for local-dev sign-in.')
+@description('OIDC redirect URI registered on the BFF (api gateway).')
 param apiGatewayRedirectUri string
 
 @description('SPA redirect URI registered on the BFF for Scalar PKCE callback.')
 param scalarRedirectUri string
 
-var ordersReadScopeId        = guid(tenantId, '${prefix}-orderservice',      'orders.read')
-var ordersProcessRoleId      = guid(tenantId, '${prefix}-orderservice',      'Orders.Process')
-var restaurantsReadRoleId    = guid(tenantId, '${prefix}-restaurantservice', 'Restaurants.Read.All')
-var gatewayOrdersReadScopeId = guid(tenantId, '${prefix}-apigateway',        'orders.read')
-
-var workerApps = [
-  'kitchenService'
-  'accountingService'
-  'deliveryService'
-  'notificationService'
-]
+var ordersReadScopeId        = guid(tenantId, '${prefix}-orders-api',      'orders.read')
+var ordersProcessRoleId      = guid(tenantId, '${prefix}-orders-api',      'Orders.Process')
+var restaurantsReadRoleId    = guid(tenantId, '${prefix}-restaurants-api', 'Restaurants.Read.All')
+var gatewayOrdersReadScopeId = guid(tenantId, '${prefix}-apigateway',      'orders.read')
 
 resource apiGateway 'Microsoft.Graph/applications@v1.0' = {
   uniqueName:     '${prefix}-apigateway'
@@ -54,7 +47,7 @@ resource apiGateway 'Microsoft.Graph/applications@v1.0' = {
       {
         id:                      gatewayOrdersReadScopeId
         adminConsentDisplayName: 'Read orders via the BFF'
-        adminConsentDescription: 'Allows the user to invoke the BFF\'s checkout endpoints which fan-out to OrderService.'
+        adminConsentDescription: 'Allows the user to invoke the BFF\'s checkout endpoints which fan-out to OrdersApi.'
         userConsentDisplayName:  'Use checkout'
         userConsentDescription:  'Allows the app to invoke checkout on your behalf.'
         value:                   'orders.read'
@@ -69,9 +62,9 @@ resource apiGatewaySp 'Microsoft.Graph/servicePrincipals@v1.0' = {
   appId: apiGateway.appId
 }
 
-resource orderService 'Microsoft.Graph/applications@v1.0' = {
-  uniqueName:     '${prefix}-orderservice'
-  displayName:    '${prefix}-orderservice'
+resource ordersApi 'Microsoft.Graph/applications@v1.0' = {
+  uniqueName:     '${prefix}-orders-api'
+  displayName:    '${prefix}-orders-api'
   signInAudience: 'AzureADMyOrg'
   api: {
     requestedAccessTokenVersion: 2
@@ -100,13 +93,13 @@ resource orderService 'Microsoft.Graph/applications@v1.0' = {
   ]
 }
 
-resource orderServiceSp 'Microsoft.Graph/servicePrincipals@v1.0' = {
-  appId: orderService.appId
+resource ordersApiSp 'Microsoft.Graph/servicePrincipals@v1.0' = {
+  appId: ordersApi.appId
 }
 
-resource restaurantService 'Microsoft.Graph/applications@v1.0' = {
-  uniqueName:     '${prefix}-restaurantservice'
-  displayName:    '${prefix}-restaurantservice'
+resource restaurantsApi 'Microsoft.Graph/applications@v1.0' = {
+  uniqueName:     '${prefix}-restaurants-api'
+  displayName:    '${prefix}-restaurants-api'
   signInAudience: 'AzureADMultipleOrgs'
   api: {
     requestedAccessTokenVersion: 2
@@ -123,35 +116,21 @@ resource restaurantService 'Microsoft.Graph/applications@v1.0' = {
   ]
 }
 
-resource restaurantServiceSp 'Microsoft.Graph/servicePrincipals@v1.0' = {
-  appId: restaurantService.appId
+resource restaurantsApiSp 'Microsoft.Graph/servicePrincipals@v1.0' = {
+  appId: restaurantsApi.appId
 }
 
-resource workerApp 'Microsoft.Graph/applications@v1.0' = [for name in workerApps: {
-  uniqueName:     '${prefix}-${toLower(name)}'
-  displayName:    '${prefix}-${toLower(name)}'
-  signInAudience: 'AzureADMyOrg'
-}]
-
-resource workerAppSp 'Microsoft.Graph/servicePrincipals@v1.0' = [for (_, i) in workerApps: {
-  appId: workerApp[i].appId
-}]
-
-@description('Map of app key → { appId, spId } consumed by permission-grants and deploy.sh.')
+@description('Map of app key → { appId, spId } consumed by permission-grants and provision-apps.sh.')
 output apps object = {
-  apiGateway:          { appId: apiGateway.appId,        spId: apiGatewaySp.id        }
-  orderService:        { appId: orderService.appId,      spId: orderServiceSp.id      }
-  restaurantService:   { appId: restaurantService.appId, spId: restaurantServiceSp.id }
-  kitchenService:      { appId: workerApp[0].appId,      spId: workerAppSp[0].id      }
-  accountingService:   { appId: workerApp[1].appId,      spId: workerAppSp[1].id      }
-  deliveryService:     { appId: workerApp[2].appId,      spId: workerAppSp[2].id      }
-  notificationService: { appId: workerApp[3].appId,      spId: workerAppSp[3].id      }
+  apiGateway:      { appId: apiGateway.appId,      spId: apiGatewaySp.id      }
+  ordersApi:       { appId: ordersApi.appId,       spId: ordersApiSp.id       }
+  restaurantsApi:  { appId: restaurantsApi.appId,  spId: restaurantsApiSp.id  }
 }
 
 @description('Deterministic role/scope IDs consumed by permission-grants.')
 output roleIds object = {
-  ordersProcess:        ordersProcessRoleId
-  restaurantsRead:      restaurantsReadRoleId
-  ordersReadScope:      ordersReadScopeId
+  ordersProcess:          ordersProcessRoleId
+  restaurantsRead:        restaurantsReadRoleId
+  ordersReadScope:        ordersReadScopeId
   gatewayOrdersReadScope: gatewayOrdersReadScopeId
 }

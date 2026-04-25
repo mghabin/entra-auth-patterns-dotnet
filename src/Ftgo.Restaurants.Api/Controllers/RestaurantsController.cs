@@ -2,7 +2,7 @@ using Ftgo.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Ftgo.RestaurantService.Controllers;
+namespace Ftgo.Restaurants.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

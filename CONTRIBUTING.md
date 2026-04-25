@@ -23,7 +23,7 @@ not (the smaller it stays, the more it teaches).
 
 - .NET SDK pinned in `global.json` (use `dotnet --version` to confirm).
 - `az` CLI + Bicep CLI for `scripts/provision-apps.sh` (Entra app provisioning via Microsoft.Graph Bicep extension).
-- `openssl` if you plan to (re)generate the AccountingService cert.
+- (Cert credentials are documented in [`docs/credential-patterns/cert.md`](docs/credential-patterns/cert.md) but not deployed by this sample — no `openssl` needed.)
 
 ## Build, test, format
 

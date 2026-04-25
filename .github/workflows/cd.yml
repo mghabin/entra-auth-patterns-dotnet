@@ -1,4 +1,4 @@
-# Cloud CD pipeline: builds the 7 FTGO service images, pushes to GHCR, and deploys.
+# Cloud CD pipeline: builds the FTGO service images, pushes to GHCR, and deploys.
 #
 # TRIGGERS:
 #   - push to main         → build + deploy-dev only
@@ -50,12 +50,9 @@ jobs:
       matrix:
         project:
           - Ftgo.ApiGateway
-          - Ftgo.OrderService
-          - Ftgo.RestaurantService
-          - Ftgo.KitchenService
-          - Ftgo.AccountingService
-          - Ftgo.DeliveryService
-          - Ftgo.NotificationService
+          - Ftgo.Orders.Api
+          - Ftgo.Restaurants.Api
+          - Ftgo.Kitchen.Worker
     outputs:
       imageTag: ${{ steps.meta.outputs.imageTag }}
     steps:
@@ -66,8 +63,10 @@ jobs:
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
           PROJECT="${{ matrix.project }}"
-          # Strip "Ftgo." prefix and lowercase → "orderservice"
+          # Strip "Ftgo." prefix and lowercase, replacing dots with hyphens (e.g.
+          # "Ftgo.Orders.Api" → "orders-api"). The image tag mirrors the ACA shortName.
           SHORT_NAME="${PROJECT#Ftgo.}"
+          SHORT_NAME="${SHORT_NAME//./-}"
           SHORT_NAME="${SHORT_NAME,,}"
           BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           {

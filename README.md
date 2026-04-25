@@ -7,26 +7,29 @@
 
 A working reference for **acquiring** and **validating** Microsoft Entra ID
 tokens in .NET 10 server-side apps. Covers app tokens (S2S / daemon) and
-user tokens (delegated / OBO) across every credential type: Managed
-Identity, Workload Identity Federation, Certificates, Client Secrets,
-and `TokenCredential` (Azure.Identity).
+user tokens (delegated / OBO) with the credential type that matters in
+2026: **Managed Identity** for Azure compute, **Workload Identity
+Federation** for everywhere else. Cert and secret patterns survive in
+docs as references, not deployed services.
 
 The sample uses **Chris Richardson's FTGO domain** (Food-To-Go, from
 *Microservices Patterns*) so each service has a recognisable
-business-capability name and demonstrates exactly one Entra auth shape.
+business-capability name.
 
 ## What's in here
 
 | Service                       | Auth shape demonstrated                                |
 |-------------------------------|--------------------------------------------------------|
-| `Ftgo.ApiGateway`             | BFF: user OIDC sign-in → OBO + S2S fan-out             |
-| `Ftgo.OrderService`           | Single-tenant resource API (delegated **or** app)      |
-| `Ftgo.RestaurantService`      | Multi-tenant resource API (app-only, tenant allow-list)|
-| `Ftgo.KitchenService`         | Worker — **Managed Identity**                          |
-| `Ftgo.AccountingService`      | Worker — **Certificate** (Key Vault-backed)            |
-| `Ftgo.DeliveryService`        | Worker — **Workload Identity Federation** (GitHub OIDC)|
-| `Ftgo.NotificationService`    | Worker — **Client Secret** (anti-pattern, for contrast)|
-| `Ftgo.Auth`                   | One-line `AddEntraAuth(...)` library                   |
+| `Ftgo.ApiGateway`             | BFF: user OIDC sign-in → OBO + S2S fan-out (uses `SignedAssertionFromManagedIdentity`) |
+| `Ftgo.Orders.Api`             | Single-tenant resource API (delegated **or** app)      |
+| `Ftgo.Restaurants.Api`        | Multi-tenant resource API (app-only, tenant allow-list)|
+| `Ftgo.Kitchen.Worker`         | Worker — **Managed Identity** (canonical Azure pattern)|
+| `Ftgo.Auth` / `Ftgo.Auth.Client` | One-line `AddEntraAuth(...)` library              |
+
+For the cert / FIC-on-GitHub / client-secret patterns, see
+[`docs/credential-patterns/`](docs/credential-patterns/) — they are
+documented but not deployed (those patterns belong outside Azure
+compute or are anti-patterns).
 
 ## Quick start
 
@@ -46,7 +49,7 @@ Free-tier Azure Container Apps deployment with **dev → ppe → prod** promotio
 ```bash
 ./scripts/bootstrap-env.sh ENV=dev    # one-time: GH OIDC UAMI + RG + RPs
 git push origin main                  # auto-deploys to dev
-./scripts/provision-apps.sh ENV=dev   # one-time: 7 app regs + FICs + env-var wiring
+./scripts/provision-apps.sh ENV=dev   # one-time per env: 3 app regs + BFF FIC + MI role grants + env-var wiring
 gh workflow run cd.yml -f environment=ppe   # manual promotion to ppe (later, prod)
 ```
 

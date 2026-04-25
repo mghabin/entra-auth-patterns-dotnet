@@ -2,7 +2,7 @@ using Azure.Core;
 using Azure.Identity;
 using Ftgo.Auth;
 
-namespace Ftgo.KitchenService.Credentials;
+namespace Ftgo.Kitchen.Worker.Credentials;
 
 internal sealed class ManagedIdentityOptions
 {

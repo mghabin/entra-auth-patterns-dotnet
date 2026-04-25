@@ -1,5 +1,5 @@
 metadata name = 'azure-orchestrator'
-metadata description = 'Resource-group-scope orchestrator that deploys Log Analytics, App Insights, Key Vault, the Container Apps managed environment, the 7 FTGO container apps, and Key Vault RBAC for their managed identities. The target resource group is created beforehand by infra/bicep/bootstrap.bicep, so the CD UAMI only needs RG-scope Contributor (least privilege).'
+metadata description = 'Resource-group-scope orchestrator that deploys Log Analytics, App Insights, Key Vault, the Container Apps managed environment, the FTGO container apps, and Key Vault RBAC for their managed identities. The target resource group is created beforehand by infra/bicep/bootstrap.bicep, so the CD UAMI only needs RG-scope Contributor (least privilege).'
 
 extension az
 
@@ -12,7 +12,7 @@ param environmentName string
 @description('Azure region for every resource. Defaults to eastus (largest free quota).')
 param location string = 'eastus'
 
-@description('Image tag applied uniformly across all 7 services (e.g. sha-abc1234, latest).')
+@description('Image tag applied uniformly across every service (e.g. sha-abc1234, latest).')
 param imageTag string = 'latest'
 
 @description('Container registry base. Public images: anonymous pull, no registry credentials needed.')
@@ -119,14 +119,14 @@ output keyVaultUri string = keyVault.outputs.vaultUri
 @description('Container Apps managed environment default domain.')
 output containerAppsDefaultDomain string = containerAppsEnv.outputs.defaultDomain
 
-@description('Map of shortName → { fqdn, principalId, name } for the 7 deployed services.')
+@description('Map of camelCase shortName → { fqdn, principalId, name } for the deployed services.')
 output services object = acaStack.outputs.services
 
 @description('FQDN of the API gateway (BFF) for redirect-uri wiring on the Entra apps.')
-output apiGatewayFqdn string = acaStack.outputs.services.apigateway.fqdn
+output apiGatewayFqdn string = acaStack.outputs.services.apiGateway.fqdn
 
 @description('Scalar API explorer URL on the BFF.')
-output scalarUrl string = 'https://${acaStack.outputs.services.apigateway.fqdn}/scalar/v1'
+output scalarUrl string = 'https://${acaStack.outputs.services.apiGateway.fqdn}/scalar/v1'
 
 @description('OIDC sign-in URL on the BFF (paste into Entra app reg redirect URIs).')
-output apiGatewayRedirectUri string = 'https://${acaStack.outputs.services.apigateway.fqdn}/signin-oidc'
+output apiGatewayRedirectUri string = 'https://${acaStack.outputs.services.apiGateway.fqdn}/signin-oidc'

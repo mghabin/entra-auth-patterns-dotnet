@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # scripts/provision-apps.sh — per-env Entra app provisioning for cloud envs (dev|ppe|prod).
 #
-# Per-env Entra app provisioning. For each cloud env (dev|ppe|prod) this script:
+# For each cloud env this script:
 #   1. Deploys infra/bicep/main.bicep at tenant scope to (re-)create the per-env app
 #      registrations (idempotent — Microsoft.Graph extension matches by uniqueName).
-#   2. Creates a federated identity credential on each non-BFF app reg trusting the
-#      Container App's system MI as a SignedAssertionFromManagedIdentity issuer.
+#      It grants Orders.Process to the KitchenWorker MI's principalId so the worker
+#      can call OrdersApi using a bare ManagedIdentityCredential.
+#   2. Creates a federated identity credential on the BFF app reg trusting the BFF
+#      Container App's system MI as a SignedAssertionFromManagedIdentity issuer
+#      (the BFF's confidential-client S2S/OBO calls require an app-reg identity).
 #   3. Pushes per-env Entra config into each Container App's environment variables
 #      (TenantId, ClientId, downstream URLs/scopes, allow-lists).
-# infra/bicep/main.bicep at tenant scope to create the per-env app registrations, then create
-# federated identity credentials linking each non-BFF service's app reg to the system MI of its
-# Container App. Cloud services use SignedAssertionFromManagedIdentity (no client secrets, no certs).
 #
-# ORDERING: this script depends on infra/bicep/azure.bicep already being deployed for ${ENV}
-# (typically by the cd.yml workflow). It reads the most-recent sub-scope deployment outputs to
-# discover the BFF FQDN and each ACA app's principalId.
+# ORDERING: this script depends on infra/bicep/azure.bicep already being deployed
+# for ${ENV} (typically by cd.yml). It reads the most-recent RG-scope deployment
+# outputs to discover the BFF FQDN and each ACA app's MI principalId.
 #
 # Usage:
 #   ./scripts/provision-apps.sh ENV=dev
@@ -32,7 +32,7 @@ ENV=""
 for arg in "$@"; do
   case "$arg" in
     ENV=*) ENV="${arg#ENV=}" ;;
-    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) sed -n '2,21p' "$0" | sed 's/^# \?//'; exit 0 ;;
     *) echo "unknown arg: $arg (expected ENV=dev|ppe|prod)" >&2; exit 2 ;;
   esac
 done
@@ -75,92 +75,69 @@ if [[ -z "$BFF_FQDN" || "$BFF_FQDN" == "null" ]]; then
 fi
 echo "    bff fqdn   = $BFF_FQDN"
 
-# 2. Tenant-scope deployment for the per-env app regs.
+# Worker MI principalIds harvested from acaStack outputs — fed into permission-grants
+# so the bare-MI workers (no app reg) get their Orders.Process role admin-consented.
+KITCHEN_MI_PRINCIPAL_ID=$(jq -r '.kitchenWorker.principalId // empty' <<<"$SERVICES")
+echo "    kitchen MI = ${KITCHEN_MI_PRINCIPAL_ID:-<none>}"
+
+# 2. Tenant-scope deployment for the per-env app regs + MI role grants.
 echo "==> Deploying infra/bicep/main.bicep (env=$ENV)"
 DEPLOY_NAME="ftgo-entra-${ENV}-$(date -u +%Y%m%d%H%M%S)"
 AGW_REDIRECT="https://${BFF_FQDN}/signin-oidc"
 SCALAR_REDIRECT="https://${BFF_FQDN}/scalar/v1"
 
-# main.${ENV}.bicepparam reads AZURE_TENANT_ID via readEnvironmentVariable; export it for the
-# bicep build-params step that az runs internally.
+# main.${ENV}.bicepparam reads AZURE_TENANT_ID via readEnvironmentVariable.
 export AZURE_TENANT_ID="$TENANT_ID"
+
+WORKER_MI_JSON=$(jq -nc --arg k "$KITCHEN_MI_PRINCIPAL_ID" \
+  'if $k == "" then {} else {kitchenWorker: $k} end')
 
 az deployment tenant create \
   --name "$DEPLOY_NAME" \
   --location eastus \
   --template-file "$ROOT/infra/bicep/main.bicep" \
   --parameters "$ROOT/infra/bicep/main.${ENV}.bicepparam" \
-  --parameters apiGatewayRedirectUri="$AGW_REDIRECT" scalarRedirectUri="$SCALAR_REDIRECT" \
+  --parameters \
+      apiGatewayRedirectUri="$AGW_REDIRECT" \
+      scalarRedirectUri="$SCALAR_REDIRECT" \
+      workerMiPrincipalIds="$WORKER_MI_JSON" \
   --only-show-errors --output none
 
 APPS=$(az deployment tenant show --name "$DEPLOY_NAME" --query 'properties.outputs.apps.value' -o json --only-show-errors)
 
-# 3. Federated identity credentials: each service's app reg ← its ACA system MI.
+# 3. Federated identity credential on the BFF app reg ← BFF ACA system MI.
 #
-# SignedAssertionFromManagedIdentity flow: the service uses its system-assigned MI to mint a token
-# with audience `api://AzureADTokenExchange`. The app reg trusts that token via a federated credential
-# whose issuer is the tenant's STS, subject is the MI's clientId.
+# SignedAssertionFromManagedIdentity flow: the BFF uses its system-assigned MI to mint a
+# token with audience `api://AzureADTokenExchange`. The BFF app reg trusts that token via
+# a federated credential whose issuer is the tenant's STS, subject is the MI's clientId.
+# Then the BFF can do confidential-client S2S/OBO calls under its app-reg identity without
+# any cert or secret on the box.
 #
-# Bicep keys:    apps[apiGateway|orderService|restaurantService|kitchenService|accountingService|deliveryService|notificationService]
-# Azure keys:    services[apigateway|orderservice|...]   (lowercased, no dot)
-declare -A SVC_TO_BICEP_KEY=(
-  [apigateway]=apiGateway
-  [orderservice]=orderService
-  [restaurantservice]=restaurantService
-  [kitchenservice]=kitchenService
-  [accountingservice]=accountingService
-  [deliveryservice]=deliveryService
-  [notificationservice]=notificationService
-)
+# Workers (Kitchen) do NOT need this — they call APIs as the MI directly (see Phase 2 docs).
 
+echo "==> Federated identity credential (BFF app reg ← BFF MI)"
 ISSUER="https://login.microsoftonline.com/${TENANT_ID}/v2.0"
-echo "==> Federated identity credentials"
-printf '    %-22s %-38s %s\n' SERVICE APP_ID FQDN
 
-for short in "${!SVC_TO_BICEP_KEY[@]}"; do
-  bicep_key="${SVC_TO_BICEP_KEY[$short]}"
-  app_id=$(jq -r --arg k "$bicep_key" '.[$k].appId // empty' <<<"$APPS")
-  # main.bicep outputs only {appId, spId}. The Graph object id isn't exposed, so
-  # resolve it on demand via the Graph appId → object lookup.
-  app_obj_id=""
-  if [[ -n "$app_id" ]]; then
-    app_obj_id=$(az ad app show --id "$app_id" --query id -o tsv --only-show-errors 2>/dev/null || echo "")
-  fi
-  fqdn=$(jq -r --arg k "$short" '.[$k].fqdn // empty' <<<"$SERVICES")
-  mi_principal_id=$(jq -r --arg k "$short" '.[$k].principalId // empty' <<<"$SERVICES")
-  # The MI clientId is what we need as the FIC subject. principalId is the SP objectId — we need
-  # to look up the matching clientId via Graph.
-  mi_client_id=""
-  if [[ -n "$mi_principal_id" && "$mi_principal_id" != "null" ]]; then
-    mi_client_id=$(az ad sp show --id "$mi_principal_id" --query appId -o tsv --only-show-errors 2>/dev/null || echo "")
-  fi
+bff_app_id=$(jq -r '.apiGateway.appId' <<<"$APPS")
+bff_app_obj_id=$(az ad app show --id "$bff_app_id" --query id -o tsv --only-show-errors)
+bff_mi_principal_id=$(jq -r '.apiGateway.principalId' <<<"$SERVICES")
+bff_mi_client_id=$(az ad sp show --id "$bff_mi_principal_id" --query appId -o tsv --only-show-errors)
+bff_fic_name="aca-${ENV}-apigateway"
 
-  printf '    %-22s %-38s %s\n' "$short" "${app_id:-?}" "${fqdn:-?}"
-
-  # Skip BFF — it doesn't use SignedAssertionFromManagedIdentity for downstream OBO directly via FIC
-  # on its own app reg in this pattern. (The BFF uses MI-issued client assertion against its own app
-  # reg too, so include it as well — keeps things uniform.)
-  if [[ -z "$app_id" || -z "$app_obj_id" || -z "$mi_client_id" ]]; then
-    echo "      skipped (missing appId / objectId / MI clientId)"
-    continue
-  fi
-
-  fic_name="aca-${ENV}-${short}"
-  if az ad app federated-credential list --id "$app_obj_id" \
-        --query "[?name=='${fic_name}']" -o tsv --only-show-errors 2>/dev/null | grep -q .; then
-    echo "      FIC '${fic_name}' already exists"
-  else
-    az ad app federated-credential create --id "$app_obj_id" --parameters "$(jq -nc \
-      --arg name "$fic_name" --arg issuer "$ISSUER" --arg sub "$mi_client_id" '{
-        name: $name,
-        issuer: $issuer,
-        subject: $sub,
-        description: "ACA system MI → app reg (SignedAssertionFromManagedIdentity)",
-        audiences: ["api://AzureADTokenExchange"]
-      }')" --only-show-errors --output none
-    echo "      created FIC '${fic_name}' (subject=${mi_client_id})"
-  fi
-done
+if az ad app federated-credential list --id "$bff_app_obj_id" \
+      --query "[?name=='${bff_fic_name}']" -o tsv --only-show-errors 2>/dev/null | grep -q .; then
+  echo "    FIC '${bff_fic_name}' already exists"
+else
+  az ad app federated-credential create --id "$bff_app_obj_id" --parameters "$(jq -nc \
+    --arg name "$bff_fic_name" --arg issuer "$ISSUER" --arg sub "$bff_mi_client_id" '{
+      name: $name,
+      issuer: $issuer,
+      subject: $sub,
+      description: "ACA system MI → BFF app reg (SignedAssertionFromManagedIdentity)",
+      audiences: ["api://AzureADTokenExchange"]
+    }')" --only-show-errors --output none
+  echo "    created FIC '${bff_fic_name}' (subject=${bff_mi_client_id})"
+fi
 
 cat <<EOF
 
@@ -177,26 +154,17 @@ EOF
 # appsettings.json ships with placeholder GUIDs. .NET config binds env vars with '__'
 # as the section separator and overrides JSON, so we push the per-env values here.
 #
-# Conventions:
-#   AzureAd__TenantId / AzureAd__ClientId        — every service needs these
-#   AzureAd__ClientCredentials__0__SourceType    — services that acquire downstream tokens
-#   DownstreamApis__<name>__BaseUrl/Scopes/...   — BFF pattern (Microsoft.Identity.Web)
-#   Downstream__BaseUrl/Scope                    — worker pattern (single-target client)
-#   EntraAuth__AllowedClientApps__N              — resource-server whitelist (OrderService)
-#   EntraAuth__AllowedTenantIds__N               — multi-tenant resource (RestaurantService)
+# NOTE: this wiring is imperative and gets clobbered on every azure.bicep redeploy.
+# Phase 3 of the refactor moves these into bicep params for declarative wiring.
+
 echo
 echo "==> Wiring Entra config into Container App env vars"
 
-# Resolve well-known FQDNs and appIds for downstream wiring.
-ORDER_FQDN=$(jq -r '.orderservice.fqdn' <<<"$SERVICES")
-REST_FQDN=$(jq -r '.restaurantservice.fqdn' <<<"$SERVICES")
-ORDER_APPID=$(jq -r '.orderService.appId' <<<"$APPS")
-REST_APPID=$(jq -r '.restaurantService.appId' <<<"$APPS")
-BFF_APPID=$(jq -r '.apiGateway.appId' <<<"$APPS")
-ACCT_APPID=$(jq -r '.accountingService.appId' <<<"$APPS")
-DELI_APPID=$(jq -r '.deliveryService.appId' <<<"$APPS")
-NOTI_APPID=$(jq -r '.notificationService.appId' <<<"$APPS")
-KITC_APPID=$(jq -r '.kitchenService.appId' <<<"$APPS")
+ORDER_FQDN=$(jq -r '.ordersApi.fqdn'      <<<"$SERVICES")
+REST_FQDN=$(jq  -r '.restaurantsApi.fqdn' <<<"$SERVICES")
+ORDER_APPID=$(jq -r '.ordersApi.appId'      <<<"$APPS")
+REST_APPID=$(jq  -r '.restaurantsApi.appId' <<<"$APPS")
+BFF_APPID=$(jq   -r '.apiGateway.appId'     <<<"$APPS")
 
 set_env() {
   local app_name="$1"; shift
@@ -206,11 +174,11 @@ set_env() {
     --set-env-vars "$@" --only-show-errors --output none
 }
 
-# 4a. Per-service: AzureAd__TenantId + AzureAd__ClientId on every app.
-for short in "${!SVC_TO_BICEP_KEY[@]}"; do
-  bicep_key="${SVC_TO_BICEP_KEY[$short]}"
-  app_id=$(jq -r --arg k "$bicep_key" '.[$k].appId' <<<"$APPS")
-  app_name=$(jq -r --arg k "$short" '.[$k].name // empty' <<<"$SERVICES")
+# 4a. AzureAd__TenantId / AzureAd__ClientId on every app that has its own app reg
+#     (BFF + 2 APIs). KitchenWorker uses MI directly and reads no AzureAd:* values.
+for key in apiGateway ordersApi restaurantsApi; do
+  app_id=$(jq -r --arg k "$key" '.[$k].appId' <<<"$APPS")
+  app_name=$(jq -r --arg k "$key" '.[$k].name // empty' <<<"$SERVICES")
   [[ -z "$app_name" ]] && continue
   set_env "$app_name" \
     "AzureAd__TenantId=$TENANT_ID" \
@@ -218,7 +186,7 @@ for short in "${!SVC_TO_BICEP_KEY[@]}"; do
 done
 
 # 4b. BFF (apigateway): DownstreamApis routing + URLs.
-BFF_APP_NAME=$(jq -r '.apigateway.name' <<<"$SERVICES")
+BFF_APP_NAME=$(jq -r '.apiGateway.name' <<<"$SERVICES")
 set_env "$BFF_APP_NAME" \
   "AzureAd__ClientCredentials__0__SourceType=SignedAssertionFromManagedIdentity" \
   "DownstreamApis__Orders__BaseUrl=https://${ORDER_FQDN}/" \
@@ -227,55 +195,51 @@ set_env "$BFF_APP_NAME" \
   "DownstreamApis__Restaurants__BaseUrl=https://${REST_FQDN}/" \
   "DownstreamApis__Restaurants__AppPermissionScopes__0=api://${REST_APPID}/.default"
 
-# 4c. Worker services (call OrderService daemon-style via SignedAssertionFromManagedIdentity).
-for short in accountingservice deliveryservice notificationservice; do
-  app_name=$(jq -r --arg k "$short" '.[$k].name // empty' <<<"$SERVICES")
-  [[ -z "$app_name" ]] && continue
-  set_env "$app_name" \
-    "AzureAd__ClientCredentials__0__SourceType=SignedAssertionFromManagedIdentity" \
-    "Downstream__BaseUrl=https://${ORDER_FQDN}/" \
-    "Downstream__Scope=api://${ORDER_APPID}/.default"
-done
-
-# 4d. KitchenService uses the MI directly (no app reg client) — point it at OrderService.
-KITC_APP_NAME=$(jq -r '.kitchenservice.name' <<<"$SERVICES")
+# 4c. KitchenWorker: bare MI, no app reg. Just point it at OrdersApi.
+KITC_APP_NAME=$(jq -r '.kitchenWorker.name' <<<"$SERVICES")
 [[ -n "$KITC_APP_NAME" ]] && set_env "$KITC_APP_NAME" \
   "Downstream__BaseUrl=https://${ORDER_FQDN}/" \
   "Downstream__Scope=api://${ORDER_APPID}/.default"
 
-# Microsoft public client appIds — pre-registered, well-known, used as a "developer's local
-# identity" via DefaultAzureCredential / AzureCliCredential. Whitelisted ONLY in the dev env
-# so a laptop can hit dev cloud APIs with `az account get-access-token`. ppe and prod must
-# only accept tokens from the real workload identities (BFF + workers).
+# Microsoft public client appIds — pre-registered, well-known, used as the developer's
+# local identity via DefaultAzureCredential / AzureCliCredential. Whitelisted ONLY in
+# the dev env so a laptop can hit dev cloud APIs with `az account get-access-token`.
+# ppe and prod accept tokens only from real workload identities (BFF).
 #   Azure CLI:  04b07795-8ddb-461a-bbee-02f9e1bf7b46
 #   Visual Studio Code: aebc6443-996d-45c2-90f0-388ff96faa56
-DEV_TOOL_CLIENTS=()
-if [[ "$ENV" == "dev" ]]; then
-  DEV_TOOL_CLIENTS=(
-    "EntraAuth__AllowedClientApps__5=04b07795-8ddb-461a-bbee-02f9e1bf7b46"
-    "EntraAuth__AllowedClientApps__6=aebc6443-996d-45c2-90f0-388ff96faa56"
-  )
-fi
-
-# 4e. OrderService: AllowedClientApps whitelist (BFF + 4 workers, plus dev tools when env=dev).
-ORDER_APP_NAME=$(jq -r '.orderservice.name' <<<"$SERVICES")
-set_env "$ORDER_APP_NAME" \
-  "EntraAuth__AllowedClientApps__0=$BFF_APPID" \
-  "EntraAuth__AllowedClientApps__1=$ACCT_APPID" \
-  "EntraAuth__AllowedClientApps__2=$DELI_APPID" \
-  "EntraAuth__AllowedClientApps__3=$NOTI_APPID" \
-  "EntraAuth__AllowedClientApps__4=$KITC_APPID" \
-  "${DEV_TOOL_CLIENTS[@]}"
-
-# 4f. RestaurantService (multi-tenant): pin allowed tenant + BFF (plus dev tools when env=dev).
+ORDER_DEV_CLIENTS=()
 REST_DEV_CLIENTS=()
 if [[ "$ENV" == "dev" ]]; then
+  ORDER_DEV_CLIENTS=(
+    "EntraAuth__AllowedClientApps__1=04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+    "EntraAuth__AllowedClientApps__2=aebc6443-996d-45c2-90f0-388ff96faa56"
+  )
   REST_DEV_CLIENTS=(
     "EntraAuth__AllowedClientApps__1=04b07795-8ddb-461a-bbee-02f9e1bf7b46"
     "EntraAuth__AllowedClientApps__2=aebc6443-996d-45c2-90f0-388ff96faa56"
   )
 fi
-REST_APP_NAME=$(jq -r '.restaurantservice.name' <<<"$SERVICES")
+
+# 4d. OrdersApi: AllowedClientApps whitelist (BFF, plus dev tools when env=dev).
+#     The KitchenWorker MI's appId could be added too, but `RequireClientApp` checks `azp`
+#     against this list — for MI tokens `azp` IS the MI clientId, so add it explicitly.
+KITC_MI_CLIENT_ID=""
+if [[ -n "$KITCHEN_MI_PRINCIPAL_ID" ]]; then
+  KITC_MI_CLIENT_ID=$(az ad sp show --id "$KITCHEN_MI_PRINCIPAL_ID" --query appId -o tsv --only-show-errors 2>/dev/null || echo "")
+fi
+ORDER_APP_NAME=$(jq -r '.ordersApi.name' <<<"$SERVICES")
+ORDER_ENV=(
+  "EntraAuth__AllowedClientApps__0=$BFF_APPID"
+  "${ORDER_DEV_CLIENTS[@]}"
+)
+if [[ -n "$KITC_MI_CLIENT_ID" ]]; then
+  # Append after dev-tools to keep dev-tool indices stable across env=dev/ppe/prod.
+  ORDER_ENV+=("EntraAuth__AllowedClientApps__3=$KITC_MI_CLIENT_ID")
+fi
+set_env "$ORDER_APP_NAME" "${ORDER_ENV[@]}"
+
+# 4e. RestaurantsApi (multi-tenant): pin allowed tenant + BFF (plus dev tools when env=dev).
+REST_APP_NAME=$(jq -r '.restaurantsApi.name' <<<"$SERVICES")
 set_env "$REST_APP_NAME" \
   "EntraAuth__AllowedTenantIds__0=$TENANT_ID" \
   "EntraAuth__AllowedClientApps__0=$BFF_APPID" \

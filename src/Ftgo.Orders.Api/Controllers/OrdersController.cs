@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.Resource;
 
-namespace Ftgo.OrderService.Controllers;
+namespace Ftgo.Orders.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

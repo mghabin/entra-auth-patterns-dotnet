@@ -21,7 +21,7 @@ Per-env Azure resources (resource group rg-ftgo-{env}-eastus):
   │    │   scale 0–3, http-concurrency rule, /health probe
   │    └─ 4 workers   (kitchen, accounting, delivery, notification)
   │        scale 1–3, CPU rule, no ingress
-  └─ Key Vault                             (RBAC, secrets used by NotificationService)
+  └─ Key Vault                             (RBAC, optional — empty by default in MI-first design)
 ```
 
 Identity:

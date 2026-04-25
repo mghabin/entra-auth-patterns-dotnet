@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "Ftgo.RestaurantService": {
+    "Ftgo.Restaurants.Api": {
       "commandName": "Project",
       "applicationUrl": "https://localhost:7103;http://localhost:5103",
       "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" }
