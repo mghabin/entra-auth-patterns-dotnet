@@ -134,6 +134,25 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Preview infra changes (what-if — dev)
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## dev — Bicep what-if preview"
+            echo ""
+            echo '```'
+            az deployment sub what-if \
+              --location eastus \
+              --template-file infra/bicep/azure.bicep \
+              --parameters infra/bicep/azure.dev.bicepparam \
+              --parameters imageTag="${IMAGE_TAG}" \
+              --result-format FullResourcePayloads \
+              --no-pretty-print 2>&1 | tail -200 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Deploy infra (azure.bicep — dev)
         id: deploy
         env:
@@ -209,6 +228,25 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Preview infra changes (what-if — ppe)
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## ppe — Bicep what-if preview"
+            echo ""
+            echo '```'
+            az deployment sub what-if \
+              --location eastus \
+              --template-file infra/bicep/azure.bicep \
+              --parameters infra/bicep/azure.ppe.bicepparam \
+              --parameters imageTag="${IMAGE_TAG}" \
+              --result-format FullResourcePayloads \
+              --no-pretty-print 2>&1 | tail -200 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Deploy infra (azure.bicep — ppe)
         id: deploy
         env:
@@ -279,6 +317,31 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Preview infra changes (what-if — prod)
+        # Prod has a required-reviewer protection rule on the GitHub Environment.
+        # The what-if output is rendered to the job summary BEFORE the actual
+        # `az deployment sub create`, so the approver sees the resource diff
+        # in the GitHub UI when deciding whether to approve the deploy.
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## prod — Bicep what-if preview"
+            echo ""
+            echo "_Review the resource changes below before approving the deployment._"
+            echo ""
+            echo '```'
+            az deployment sub what-if \
+              --location eastus \
+              --template-file infra/bicep/azure.bicep \
+              --parameters infra/bicep/azure.prod.bicepparam \
+              --parameters imageTag="${IMAGE_TAG}" \
+              --result-format FullResourcePayloads \
+              --no-pretty-print 2>&1 | tail -200 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy infra (azure.bicep — prod)
         id: deploy
