@@ -38,3 +38,5 @@ appsettings.*.local.json
 
 # Compiled Bicep ARM output
 infra/bicep/*.json
+.bicep-out/
+infra/bicep/modules/*.json
