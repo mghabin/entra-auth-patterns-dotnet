@@ -21,7 +21,9 @@ ARG TARGETARCH
 WORKDIR /src
 
 # Central props affect every restore — copy first.
-COPY Directory.Build.props Directory.Packages.props EntraAuthPatterns.slnx ./
+# .editorconfig is required so analyzers (Meziantou, etc.) honor per-rule
+# severity overrides during `dotnet publish` inside the container.
+COPY Directory.Build.props Directory.Packages.props .editorconfig EntraAuthPatterns.slnx ./
 
 # Copy ALL service csprojs (small files; this layer is cached as long as none of them change).
 # Including all of them lets us share one restore layer across services that ProjectReference each other.
@@ -70,7 +72,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
         -p:DebugType=embedded \
         -p:Version=$BUILD_VERSION \
         -p:SourceRevisionId=$BUILD_GIT_SHA \
-    && for f in /app/${PROJECT}.*; do mv "$f" "${f/${PROJECT}/app}"; done
+    && for f in /app/${PROJECT}.*; do mv "$f" "/app/app.${f#/app/${PROJECT}.}"; done
 
 # ─── Stage 3: runtime (chiseled, ~95 MB, runs as uid 11654 non-root by default) ───
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
