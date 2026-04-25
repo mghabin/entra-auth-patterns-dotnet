@@ -9,12 +9,13 @@
 # Auth tokens / JWT validation are culture-invariant, so plain noble-chiseled (no ICU/tzdata) is sufficient.
 
 ARG PROJECT
-ARG TARGETARCH
+# Default TARGETARCH to amd64 for single-arch builds; buildx overrides for multi-arch.
+ARG TARGETARCH=amd64
 
 # ─── Stage 1: restore (cached unless csprojs or central package files change) ───
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble AS restore
 ARG PROJECT
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 WORKDIR /src
 
 # Central props affect every restore — copy first.
@@ -47,7 +48,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
 # ─── Stage 2: publish ───
 FROM restore AS publish
 ARG PROJECT
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 ARG BUILD_GIT_SHA=local
 ARG BUILD_VERSION=0.0.0-local
 COPY src/ src/
