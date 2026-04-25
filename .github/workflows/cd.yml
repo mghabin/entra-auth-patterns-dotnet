@@ -1,6 +1,13 @@
-# Cloud CD pipeline: builds the 7 FTGO service images, pushes to GHCR, and rolls them
-# through dev → ppe → prod environments by deploying infra/bicep/azure.bicep (subscription scope)
-# and infra/bicep/main.bicep (tenant scope). OIDC-only auth — no client secrets.
+# Cloud CD pipeline: builds the 7 FTGO service images, pushes to GHCR, and deploys.
+#
+# TRIGGERS:
+#   - push to main         → build + deploy-dev only
+#   - workflow_dispatch    → build + deploy through to chosen env:
+#         environment=dev   → dev
+#         environment=ppe   → dev → ppe
+#         environment=prod  → dev → ppe → prod  (requires reviewer on prod environment)
+#
+# ppe and prod NEVER run on push — they require an explicit dispatch with the env input.
 #
 # Environment GitHub vars expected per env: AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID
 # Repo-level secret expected: AZURE_TENANT_ID
@@ -193,8 +200,8 @@ jobs:
     needs: [build-images, deploy-dev]
     if: |
       always() && needs.deploy-dev.result == 'success' &&
-      (github.event_name == 'push' ||
-       github.event.inputs.environment == 'ppe' ||
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.environment == 'ppe' ||
        github.event.inputs.environment == 'prod')
     runs-on: ubuntu-latest
     environment: ppe
@@ -285,7 +292,8 @@ jobs:
     needs: [build-images, deploy-ppe]
     if: |
       always() && needs.deploy-ppe.result == 'success' &&
-      (github.event_name == 'push' || github.event.inputs.environment == 'prod')
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.environment == 'prod'
     runs-on: ubuntu-latest
     environment: prod
     concurrency:
