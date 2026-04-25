@@ -2,10 +2,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ftgo.Auth;
 
-/// <summary>
-/// Fails startup fast if <see cref="EntraAuthOptions"/> is configured incorrectly
-/// (e.g. multi-tenant with no allow-list).
-/// </summary>
 internal sealed class EntraAuthOptionsValidator : IValidateOptions<EntraAuthOptions>
 {
     public ValidateOptionsResult Validate(string? name, EntraAuthOptions options)

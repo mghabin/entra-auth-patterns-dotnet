@@ -4,10 +4,6 @@ using OpenTelemetry.Trace;
 
 namespace Ftgo.Auth;
 
-/// <summary>
-/// Web-host extension that layers AspNetCore tracing + metrics on top of
-/// <see cref="TelemetryExtensions.AddEntraAuthTelemetry(IServiceCollection, string)"/>.
-/// </summary>
 public static class WebTelemetryExtensions
 {
     public static IServiceCollection AddEntraAuthWebTelemetry(

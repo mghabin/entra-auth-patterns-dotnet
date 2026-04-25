@@ -4,11 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ftgo.Auth;
 
-/// <summary>
-/// A <see cref="BackgroundService"/> that probes the downstream API exactly once on
-/// startup, logs the result, then triggers <see cref="IHostApplicationLifetime.StopApplication"/>.
-/// This is the shape every worker in this sample takes; only the token provider differs.
-/// </summary>
+/// <summary>Probes the downstream API once on startup, logs the result, then stops the host. Each worker uses the same shape with a different <see cref="IAppTokenProvider"/>.</summary>
 public sealed partial class DownstreamProbeService(
     DownstreamApiClient client,
     IOptions<DownstreamApiOptions> options,
@@ -26,7 +22,7 @@ public sealed partial class DownstreamProbeService(
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // Graceful shutdown — nothing to do.
+            // Graceful shutdown.
         }
 #pragma warning disable CA1031 // Probe is the entire purpose of this BackgroundService; we surface failures via exit code + logs and must not let the host crash silently.
         catch (Exception ex)

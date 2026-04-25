@@ -5,11 +5,7 @@ namespace Ftgo.Auth;
 
 public static class DownstreamApiServiceCollectionExtensions
 {
-    /// <summary>
-    /// Registers <see cref="DownstreamApiClient"/> + its backing <see cref="HttpClient"/>
-    /// with the standard resilience handler (retry + circuit breaker + timeout).
-    /// Caller must separately register an <see cref="IAppTokenProvider"/> impl.
-    /// </summary>
+    /// <summary>Registers <see cref="DownstreamApiClient"/> with the standard resilience handler. Caller supplies an <see cref="IAppTokenProvider"/>.</summary>
     public static IHttpClientBuilder AddEntraAuthDownstreamApi(
         this IServiceCollection services,
         Action<DownstreamApiOptions>? configureOptions = null)

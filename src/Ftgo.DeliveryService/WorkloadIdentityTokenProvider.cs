@@ -4,12 +4,7 @@ using Ftgo.Auth;
 
 namespace Ftgo.DeliveryService.Credentials;
 
-/// <summary>
-/// DeliveryService — app token via WORKLOAD IDENTITY FEDERATION (FIC). The
-/// <see cref="WorkloadIdentityCredential"/> reads the federated token via the
-/// AZURE_* env vars injected by the platform (e.g. Azure Workload Identity on AKS,
-/// GitHub Actions OIDC). No secret is stored.
-/// </summary>
+/// <summary>App token via Workload Identity Federation. Reads the federated token from the platform (AKS workload identity, GitHub OIDC, …) via <c>AZURE_*</c> env vars; no secret stored.</summary>
 internal sealed class WorkloadIdentityTokenProvider : IAppTokenProvider
 {
     private readonly TokenCredential _credential = new WorkloadIdentityCredential();

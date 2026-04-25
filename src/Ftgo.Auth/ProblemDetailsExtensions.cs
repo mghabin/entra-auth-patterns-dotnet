@@ -6,10 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Ftgo.Auth;
 
-/// <summary>
-/// Wires ASP.NET Core's ProblemDetails pipeline + a global exception handler that emits
-/// RFC 7807 responses and never leaks stack traces to callers.
-/// </summary>
+/// <summary>RFC 7807 ProblemDetails pipeline + global exception handler that never leaks stack traces to callers.</summary>
 public static class ProblemDetailsExtensions
 {
     public static IServiceCollection AddEntraAuthProblemDetails(this IServiceCollection services)
@@ -54,7 +51,7 @@ internal sealed partial class EntraAuthExceptionHandler(ILogger<EntraAuthExcepti
                 Type   = "https://httpstatuses.com/500",
                 Title  = "An unexpected error occurred.",
                 Status = StatusCodes.Status500InternalServerError,
-                Detail = null, // never leak exception message
+                Detail = null, // do not leak exception text to callers
             },
         });
     }

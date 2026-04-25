@@ -14,24 +14,23 @@ local equivalent (table at the bottom).
 ## 1. One-time bootstrap
 
 ```bash
-az login --allow-no-subscriptions
+az login --allow-no-subscriptions --tenant <YOUR_TENANT>
 gh auth login        # for `gh secret set` later
 
-# Creates 7 app registrations, 1 federated credential, a self-signed
-# cert; prints the dotnet user-secrets and gh secret commands you
-# need to run. Idempotent — safe to re-run.
-./scripts/setup.sh   # PowerShell: ./scripts/setup.ps1
+# Microsoft.Graph Bicep extension declaratively creates 7 app regs +
+# service principals + scopes/roles + admin-consented permissions.
+# A wrapper script then adds the federated credential, generates a
+# self-signed cert, and hydrates dotnet user-secrets for all 7 projects.
+# Idempotent — safe to re-run.
+./scripts/deploy.sh   # bash 4+; needs Owner at `/` (see notes below)
 ```
 
-Then in the Entra portal (one-time, click-through):
-
-1. **Admin-consent** the API permissions for each app reg.
-2. On `ftgo-orderservice`: expose scope `orders.read` and app role `Orders.Process`.
-3. On `ftgo-restaurantservice`: expose app role `Restaurants.Read.All`.
-4. On every API app reg: set `requestedAccessTokenVersion = 2`.
-
-(These four still need a portal click because `az ad app update` for
-scopes/roles is awkward; the script prints the exact JSON to paste.)
+> **Heads-up — ARM access.** `az deployment tenant create` requires
+> Resource Manager RBAC even when deploying only `Microsoft.Graph/*`
+> resources. On a fresh dev tenant: portal.azure.com → **Microsoft Entra
+> ID → Properties → "Access management for Azure resources" = Yes**, then
+> `az role assignment create --assignee-object-id $(az ad signed-in-user
+> show --query id -o tsv) --role Owner --scope /`.
 
 ## 2. Telemetry — Aspire Dashboard locally (free, OSS)
 

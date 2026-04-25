@@ -23,8 +23,7 @@ auth shapes are taught against recognisable, business-meaningful names.
 
 ## App registrations
 
-Create seven app registrations (the `scripts/setup-entra.{ps1,sh}` helpers
-do this idempotently — see `run-locally.md`):
+Create seven app registrations. Provisioning is declarative via the **Microsoft.Graph Bicep extension** at `infra/bicep/main.bicep`, run through `scripts/deploy.sh` — apps, service principals, scopes/roles and admin-consented permissions are created idempotently:
 
 1. **ftgo-apigateway** (single-tenant) — consumes the `orders.read` delegated scope on behalf of users.
 2. **ftgo-orderservice** (single-tenant) — exposes scope `orders.read` and app role `Orders.Process`.

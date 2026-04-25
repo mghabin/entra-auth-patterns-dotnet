@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# scripts/new-cert.sh
+# scripts/new-cert.sh — generate a self-signed cert for ftgo-accountingservice and upload the
+# public key to its app registration. Idempotent. The .pfx stays local; do NOT commit it.
 #
-# Generates a self-signed certificate for ftgo-accountingservice and
-# uploads the public key to the app registration. The .pfx is saved
-# locally; **do not commit it** (the .gitignore excludes *.pfx).
-#
-# Prerequisites: openssl, az CLI logged in.
+# Prereqs: openssl, az CLI logged in.
 
 set -euo pipefail
 
@@ -32,7 +29,7 @@ openssl pkcs12 -export -inkey "$KEY" -in "$CRT" -out "$PFX" -password "pass:${PF
 
 THUMB=$(openssl x509 -in "$CRT" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':' | tr 'A-Z' 'a-z')
 APP_ID=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv)
-[[ -z "$APP_ID" ]] && { echo "ERROR: app '$APP_NAME' not found. Run scripts/setup-entra.sh first." >&2; exit 1; }
+[[ -z "$APP_ID" ]] && { echo "ERROR: app '$APP_NAME' not found. Run scripts/deploy.sh first." >&2; exit 1; }
 
 EXISTING=$(az ad app credential list --id "$APP_ID" \
   --query "[?customKeyIdentifier!=null] | [?ends_with(tolower(customKeyIdentifier), '${THUMB}')]" \
@@ -53,7 +50,10 @@ echo "  Thumbprint: $THUMB"
 echo "============================================================"
 cat <<EOF
 
-# Tell AccountingService where to read it (local dev: file path; prod: Key Vault)
-dotnet user-secrets --project src/Ftgo.AccountingService set "KeyVault:Uri"      "https://example-kv.vault.azure.net/"
-dotnet user-secrets --project src/Ftgo.AccountingService set "KeyVault:CertName" "${APP_NAME}"
+# Local dev: AccountingService reads the cert directly from this PFX (already wired by deploy.sh).
+dotnet user-secrets --project src/Ftgo.AccountingService set "KeyVault:LocalPfxPath" "$(cd "$(dirname "$PFX")" && pwd)/$(basename "$PFX")"
+
+# Production: switch to Key Vault.
+# dotnet user-secrets --project src/Ftgo.AccountingService set "KeyVault:Uri"      "https://YOUR-KV.vault.azure.net/"
+# dotnet user-secrets --project src/Ftgo.AccountingService set "KeyVault:CertName" "${APP_NAME}"
 EOF

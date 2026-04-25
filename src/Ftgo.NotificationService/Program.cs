@@ -1,8 +1,8 @@
 using Ftgo.Auth;
 using Ftgo.NotificationService.Credentials;
 
-// NotificationService — app token via CLIENT SECRET. ⚠ Anti-pattern in production; prefer MI > FIC > Cert.
-// The secret must be injected at runtime (env var sourced from Key Vault / Secrets Manager).
+// ⚠ Anti-pattern: client-secret credential is included only for contrast. Prefer MI > FIC > Cert.
+// The secret is sourced at runtime from FTGO_NOTIFICATIONSERVICE_CLIENT_SECRET (Key Vault-injected).
 
 var builder = Host.CreateApplicationBuilder(args);
 
