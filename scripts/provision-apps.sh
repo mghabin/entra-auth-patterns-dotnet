@@ -50,16 +50,17 @@ echo "==> env    : $ENV (rg=$RG_NAME)"
 
 # 1. Locate the most-recent successful azure.bicep deployment for this env.
 echo "==> Reading latest azure.bicep deployment outputs"
-LATEST_DEPLOY=$(az deployment sub list \
+LATEST_DEPLOY=$(az deployment group list \
+  --resource-group "$RG_NAME" \
   --query "[?starts_with(name, 'ftgo-${ENV}-') && properties.provisioningState=='Succeeded'] | sort_by(@, &properties.timestamp) | [-1].name" \
   -o tsv --only-show-errors)
 if [[ -z "$LATEST_DEPLOY" ]]; then
-  echo "ERROR: no successful sub-scope deployment 'ftgo-${ENV}-*' found. Deploy azure.bicep first." >&2
+  echo "ERROR: no successful RG-scope deployment 'ftgo-${ENV}-*' found in $RG_NAME. Deploy azure.bicep first." >&2
   exit 1
 fi
 echo "    deployment = $LATEST_DEPLOY"
 
-OUTPUTS=$(az deployment sub show --name "$LATEST_DEPLOY" --query properties.outputs -o json --only-show-errors)
+OUTPUTS=$(az deployment group show --resource-group "$RG_NAME" --name "$LATEST_DEPLOY" --query properties.outputs -o json --only-show-errors)
 BFF_FQDN=$(jq -r '.apiGatewayFqdn.value' <<<"$OUTPUTS")
 SERVICES=$(jq -r '.services.value' <<<"$OUTPUTS")
 if [[ -z "$BFF_FQDN" || "$BFF_FQDN" == "null" ]]; then
