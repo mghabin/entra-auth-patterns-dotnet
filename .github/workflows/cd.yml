@@ -1,0 +1,315 @@
+# Cloud CD pipeline: builds the 7 FTGO service images, pushes to GHCR, and rolls them
+# through dev → ppe → prod environments by deploying infra/bicep/azure.bicep (subscription scope)
+# and infra/bicep/main.bicep (tenant scope). OIDC-only auth — no client secrets.
+#
+# Environment GitHub vars expected per env: AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID
+# Repo-level secret expected: AZURE_TENANT_ID
+# Bootstrap with scripts/bootstrap-env.sh ENV=<env>.
+name: cd
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment (dev|ppe|prod). Defaults to full dev→ppe→prod chain.
+        required: false
+        default: dev
+        type: choice
+        options: [dev, ppe, prod]
+      imageTag:
+        description: Existing image tag (e.g. sha-abc1234) to redeploy. Leave blank to build a fresh one from HEAD.
+        required: false
+        default: ''
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-images:
+    if: github.event_name == 'push' || github.event.inputs.imageTag == ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - Ftgo.ApiGateway
+          - Ftgo.OrderService
+          - Ftgo.RestaurantService
+          - Ftgo.KitchenService
+          - Ftgo.AccountingService
+          - Ftgo.DeliveryService
+          - Ftgo.NotificationService
+    outputs:
+      imageTag: ${{ steps.meta.outputs.imageTag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image metadata
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          PROJECT="${{ matrix.project }}"
+          # Strip "Ftgo." prefix and lowercase → "orderservice"
+          SHORT_NAME="${PROJECT#Ftgo.}"
+          SHORT_NAME="${SHORT_NAME,,}"
+          BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            echo "SHORT_SHA=${SHORT_SHA}"
+            echo "SHORT_NAME=${SHORT_NAME}"
+            echo "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}"
+            echo "imageTag=sha-${SHORT_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push ${{ matrix.project }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          provenance: false
+          build-args: |
+            PROJECT=${{ matrix.project }}
+            BUILD_GIT_SHA=${{ github.sha }}
+            BUILD_VERSION=0.0.0-sha-${{ steps.meta.outputs.SHORT_SHA }}
+            BUILD_TIMESTAMP=${{ steps.meta.outputs.BUILD_TIMESTAMP }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/ftgo-${{ steps.meta.outputs.SHORT_NAME }}:sha-${{ steps.meta.outputs.SHORT_SHA }}
+            ghcr.io/${{ github.repository_owner }}/ftgo-${{ steps.meta.outputs.SHORT_NAME }}:latest
+          cache-from: type=gha,scope=ftgo-${{ steps.meta.outputs.SHORT_NAME }}
+          cache-to: type=gha,scope=ftgo-${{ steps.meta.outputs.SHORT_NAME }},mode=max
+
+  deploy-dev:
+    needs: build-images
+    if: |
+      always() &&
+      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') &&
+      (github.event_name == 'push' ||
+       github.event.inputs.environment == 'dev' ||
+       github.event.inputs.environment == 'ppe' ||
+       github.event.inputs.environment == 'prod')
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      scalar_url: ${{ steps.deploy.outputs.scalar_url }}
+      apigateway_fqdn: ${{ steps.deploy.outputs.apigateway_fqdn }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.imageTag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ needs.build-images.outputs.imageTag }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="sha-${GITHUB_SHA::7}"
+          fi
+          echo "imageTag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infra (azure.bicep — dev)
+        id: deploy
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+        run: |
+          set -euo pipefail
+          NAME="ftgo-dev-$(date -u +%Y%m%d%H%M%S)"
+          az deployment sub create \
+            --location eastus \
+            --template-file infra/bicep/azure.bicep \
+            --parameters infra/bicep/azure.dev.bicepparam \
+            --parameters imageTag="${IMAGE_TAG}" \
+            --name "$NAME" \
+            --only-show-errors \
+            --output none
+          OUTPUTS=$(az deployment sub show --name "$NAME" --query properties.outputs -o json)
+          AGW_FQDN=$(echo "$OUTPUTS" | jq -r '.apiGatewayFqdn.value')
+          SCALAR_URL=$(echo "$OUTPUTS" | jq -r '.scalarUrl.value')
+          AGW_REDIRECT=$(echo "$OUTPUTS" | jq -r '.apiGatewayRedirectUri.value')
+          {
+            echo "apigateway_fqdn=${AGW_FQDN}"
+            echo "scalar_url=${SCALAR_URL}"
+            echo "apigateway_redirect=${AGW_REDIRECT}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        run: |
+          {
+            echo "## dev deployed"
+            echo "- Image tag: \`${{ steps.tag.outputs.imageTag }}\`"
+            echo "- Scalar: ${{ steps.deploy.outputs.scalar_url }}"
+            echo "- BFF: https://${{ steps.deploy.outputs.apigateway_fqdn }}"
+            echo ""
+            echo "_Entra app regs are provisioned out-of-band via_ \`scripts/provision-apps.sh ENV=dev\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-ppe:
+    needs: [build-images, deploy-dev]
+    if: |
+      always() && needs.deploy-dev.result == 'success' &&
+      (github.event_name == 'push' ||
+       github.event.inputs.environment == 'ppe' ||
+       github.event.inputs.environment == 'prod')
+    runs-on: ubuntu-latest
+    environment: ppe
+    concurrency:
+      group: ppe
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      scalar_url: ${{ steps.deploy.outputs.scalar_url }}
+      apigateway_fqdn: ${{ steps.deploy.outputs.apigateway_fqdn }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.imageTag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ needs.build-images.outputs.imageTag }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="sha-${GITHUB_SHA::7}"
+          fi
+          echo "imageTag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infra (azure.bicep — ppe)
+        id: deploy
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+        run: |
+          set -euo pipefail
+          NAME="ftgo-ppe-$(date -u +%Y%m%d%H%M%S)"
+          az deployment sub create \
+            --location eastus \
+            --template-file infra/bicep/azure.bicep \
+            --parameters infra/bicep/azure.ppe.bicepparam \
+            --parameters imageTag="${IMAGE_TAG}" \
+            --name "$NAME" \
+            --only-show-errors \
+            --output none
+          OUTPUTS=$(az deployment sub show --name "$NAME" --query properties.outputs -o json)
+          AGW_FQDN=$(echo "$OUTPUTS" | jq -r '.apiGatewayFqdn.value')
+          SCALAR_URL=$(echo "$OUTPUTS" | jq -r '.scalarUrl.value')
+          AGW_REDIRECT=$(echo "$OUTPUTS" | jq -r '.apiGatewayRedirectUri.value')
+          {
+            echo "apigateway_fqdn=${AGW_FQDN}"
+            echo "scalar_url=${SCALAR_URL}"
+            echo "apigateway_redirect=${AGW_REDIRECT}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        run: |
+          {
+            echo "## ppe deployed"
+            echo "- Image tag: \`${{ steps.tag.outputs.imageTag }}\`"
+            echo "- Scalar: ${{ steps.deploy.outputs.scalar_url }}"
+            echo "- BFF: https://${{ steps.deploy.outputs.apigateway_fqdn }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-prod:
+    needs: [build-images, deploy-ppe]
+    if: |
+      always() && needs.deploy-ppe.result == 'success' &&
+      (github.event_name == 'push' || github.event.inputs.environment == 'prod')
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: prod
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      scalar_url: ${{ steps.deploy.outputs.scalar_url }}
+      apigateway_fqdn: ${{ steps.deploy.outputs.apigateway_fqdn }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.imageTag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ needs.build-images.outputs.imageTag }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="sha-${GITHUB_SHA::7}"
+          fi
+          echo "imageTag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infra (azure.bicep — prod)
+        id: deploy
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+        run: |
+          set -euo pipefail
+          NAME="ftgo-prod-$(date -u +%Y%m%d%H%M%S)"
+          az deployment sub create \
+            --location eastus \
+            --template-file infra/bicep/azure.bicep \
+            --parameters infra/bicep/azure.prod.bicepparam \
+            --parameters imageTag="${IMAGE_TAG}" \
+            --name "$NAME" \
+            --only-show-errors \
+            --output none
+          OUTPUTS=$(az deployment sub show --name "$NAME" --query properties.outputs -o json)
+          AGW_FQDN=$(echo "$OUTPUTS" | jq -r '.apiGatewayFqdn.value')
+          SCALAR_URL=$(echo "$OUTPUTS" | jq -r '.scalarUrl.value')
+          AGW_REDIRECT=$(echo "$OUTPUTS" | jq -r '.apiGatewayRedirectUri.value')
+          {
+            echo "apigateway_fqdn=${AGW_FQDN}"
+            echo "scalar_url=${SCALAR_URL}"
+            echo "apigateway_redirect=${AGW_REDIRECT}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        run: |
+          {
+            echo "## prod deployed"
+            echo "- Image tag: \`${{ steps.tag.outputs.imageTag }}\`"
+            echo "- Scalar: ${{ steps.deploy.outputs.scalar_url }}"
+            echo "- BFF: https://${{ steps.deploy.outputs.apigateway_fqdn }}"
+          } >> "$GITHUB_STEP_SUMMARY"
