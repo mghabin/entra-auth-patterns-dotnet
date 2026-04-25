@@ -72,7 +72,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
         -p:DebugType=embedded \
         -p:Version=$BUILD_VERSION \
         -p:SourceRevisionId=$BUILD_GIT_SHA \
-    && for f in /app/${PROJECT}.*; do mv "$f" "${f/${PROJECT}/app}"; done
+    && for f in /app/${PROJECT}.*; do mv "$f" "/app/app.${f#/app/${PROJECT}.}"; done
 
 # ─── Stage 3: runtime (chiseled, ~95 MB, runs as uid 11654 non-root by default) ───
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
