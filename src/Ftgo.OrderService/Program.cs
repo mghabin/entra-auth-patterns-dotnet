@@ -7,6 +7,7 @@ builder.Services.AddEntraAuthWebTelemetry("Ftgo.OrderService");
 builder.Services.AddEntraAuthProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 app.UseEntraAuthProblemDetails();
@@ -15,4 +16,5 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapOpenApi();
 app.MapScalarApiReference();
+app.MapHealthChecks("/health");
 await app.RunAsync();

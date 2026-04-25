@@ -25,15 +25,15 @@ param regionShort string
 @description('Tags applied to every container app.')
 param tags object = {}
 
-@description('Service definitions: project = csproj folder name, shortName = lowercase image/name suffix.')
+@description('Service definitions: project = csproj folder name, shortName = lowercase image/name suffix, isWebApp = whether to expose HTTP ingress + /health probe.')
 param services array = [
-  { project: 'Ftgo.ApiGateway',           shortName: 'apigateway'          }
-  { project: 'Ftgo.OrderService',         shortName: 'orderservice'        }
-  { project: 'Ftgo.RestaurantService',    shortName: 'restaurantservice'   }
-  { project: 'Ftgo.KitchenService',       shortName: 'kitchenservice'      }
-  { project: 'Ftgo.AccountingService',    shortName: 'accountingservice'   }
-  { project: 'Ftgo.DeliveryService',      shortName: 'deliveryservice'     }
-  { project: 'Ftgo.NotificationService',  shortName: 'notificationservice' }
+  { project: 'Ftgo.ApiGateway',           shortName: 'apigateway',          isWebApp: true  }
+  { project: 'Ftgo.OrderService',         shortName: 'orderservice',        isWebApp: true  }
+  { project: 'Ftgo.RestaurantService',    shortName: 'restaurantservice',   isWebApp: true  }
+  { project: 'Ftgo.KitchenService',       shortName: 'kitchenservice',      isWebApp: false }
+  { project: 'Ftgo.AccountingService',    shortName: 'accountingservice',   isWebApp: false }
+  { project: 'Ftgo.DeliveryService',      shortName: 'deliveryservice',     isWebApp: false }
+  { project: 'Ftgo.NotificationService',  shortName: 'notificationservice', isWebApp: false }
 ]
 
 module containerApps 'container-app.bicep' = [for svc in services: {
@@ -46,6 +46,7 @@ module containerApps 'container-app.bicep' = [for svc in services: {
     image:                       '${containerRegistry}/ftgo-${svc.shortName}:${imageTag}'
     appInsightsConnectionString: appInsightsConnectionString
     environmentName:             environmentName
+    enableIngress:               svc.isWebApp
     tags:                        tags
   }
 }]

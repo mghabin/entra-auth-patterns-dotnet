@@ -33,6 +33,9 @@ param cpu string = '0.5'
 @description('Memory per replica.')
 param memory string = '1.0Gi'
 
+@description('When false, the app has no public ingress, no HTTP probe, and uses CPU-based scaling. Used for headless worker services.')
+param enableIngress bool = true
+
 var aspNetCoreEnvironment = '${toUpper(substring(environmentName, 0, 1))}${substring(environmentName, 1)}'
 
 resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
@@ -44,12 +47,14 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
   }
   properties: {
     environmentId: containerAppsEnvironmentId
-    configuration: {
+    configuration: union({
       activeRevisionsMode: 'Single'
+      registries: []
+    }, enableIngress ? {
       ingress: {
-        external:    true
-        targetPort:  8080
-        transport:   'auto'
+        external:      true
+        targetPort:    8080
+        transport:     'auto'
         allowInsecure: false
         traffic: [
           {
@@ -58,8 +63,7 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
           }
         ]
       }
-      registries: []
-    }
+    } : {})
     template: {
       containers: [
         {
@@ -83,7 +87,7 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
               value: appInsightsConnectionString
             }
           ]
-          probes: [
+          probes: enableIngress ? [
             {
               type: 'Liveness'
               httpGet: {
@@ -96,18 +100,29 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
               timeoutSeconds:      5
               failureThreshold:    3
             }
-          ]
+          ] : []
         }
       ]
       scale: {
-        minReplicas: 0
+        minReplicas: enableIngress ? 0 : 1
         maxReplicas: 3
-        rules: [
+        rules: enableIngress ? [
           {
             name: 'http-concurrency'
             http: {
               metadata: {
                 concurrentRequests: '5'
+              }
+            }
+          }
+        ] : [
+          {
+            name: 'cpu-load'
+            custom: {
+              type: 'cpu'
+              metadata: {
+                type:  'Utilization'
+                value: '70'
               }
             }
           }
@@ -117,8 +132,8 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
   }
 }
 
-@description('FQDN ACA assigned to the app (e.g. ftgo-dev-apigateway-eus.<random>.eastus.azurecontainerapps.io).')
-output fqdn string = app.properties.configuration.ingress.fqdn
+@description('FQDN ACA assigned to the app, or empty string for headless workers.')
+output fqdn string = enableIngress ? app.properties.configuration.ingress.fqdn : ''
 
 @description('System-assigned managed identity principalId — consumed by Key Vault RBAC.')
 output principalId string = app.identity.principalId
