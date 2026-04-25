@@ -75,6 +75,10 @@ DEPLOY_NAME="ftgo-entra-${ENV}-$(date -u +%Y%m%d%H%M%S)"
 AGW_REDIRECT="https://${BFF_FQDN}/signin-oidc"
 SCALAR_REDIRECT="https://${BFF_FQDN}/scalar/v1"
 
+# main.${ENV}.bicepparam reads AZURE_TENANT_ID via readEnvironmentVariable; export it for the
+# bicep build-params step that az runs internally.
+export AZURE_TENANT_ID="$TENANT_ID"
+
 az deployment tenant create \
   --name "$DEPLOY_NAME" \
   --location eastus \
