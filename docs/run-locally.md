@@ -55,7 +55,7 @@ dotnet run --project src/Ftgo.ApiGateway        # https://localhost:7101
 ```
 
 Acquire a user token (e.g. Postman → Authorization Code with PKCE
-against the `ftgo-apigateway` app reg, with redirect
+against the `ftgo-local-apigateway` app reg, with redirect
 `https://localhost:7101/signin-oidc`) and exercise:
 
 ```bash

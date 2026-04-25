@@ -136,16 +136,16 @@ fi
 
 echo
 echo "==> Self-signed cert for AccountingService"
-APP_NAME=ftgo-accountingservice "$HERE/new-cert.sh"
-ACCT_PFX="$ROOT/.certs/ftgo-accountingservice.pfx"
+APP_NAME=ftgo-local-accountingservice "$HERE/new-cert.sh"
+ACCT_PFX="$ROOT/.certs/ftgo-local-accountingservice.pfx"
 
 # ApiGateway also needs a credential for downstream OBO. In Azure it uses a federated assertion via
 # managed identity (`SignedAssertionFromManagedIdentity`); on a laptop there's no IMDS, so we generate
 # a local cert and override `AzureAd:ClientCredentials` via user-secrets to source from disk.
 echo
 echo "==> Self-signed cert for ApiGateway (local-dev OBO)"
-APP_NAME=ftgo-apigateway "$HERE/new-cert.sh"
-GATE_PFX="$ROOT/.certs/ftgo-apigateway.pfx"
+APP_NAME=ftgo-local-apigateway "$HERE/new-cert.sh"
+GATE_PFX="$ROOT/.certs/ftgo-local-apigateway.pfx"
 
 echo
 echo "==> Hydrating dotnet user-secrets for 7 projects"

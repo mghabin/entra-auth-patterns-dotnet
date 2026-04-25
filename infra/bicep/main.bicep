@@ -16,7 +16,7 @@ param tenantId string
 @maxLength(16)
 param prefix string = 'ftgo'
 
-@description('Logical environment name. "local" keeps the existing local-dev names (ftgo-*); cloud envs (dev/ppe/prod) suffix it (ftgo-dev-*).')
+@description('Logical environment name. Always suffixed onto the prefix (ftgo-local-*, ftgo-dev-*, …) so each env owns an isolated set of app regs.')
 @allowed([ 'local', 'dev', 'ppe', 'prod' ])
 param environmentName string = 'local'
 
@@ -26,7 +26,7 @@ param apiGatewayRedirectUri string = 'https://localhost:7101/signin-oidc'
 @description('SPA redirect URI for Scalar PKCE callback on the BFF.')
 param scalarRedirectUri string = 'https://localhost:7101/scalar/v1'
 
-var effectivePrefix = environmentName == 'local' ? prefix : '${prefix}-${environmentName}'
+var effectivePrefix = '${prefix}-${environmentName}'
 
 module appRegistrations 'modules/app-registrations.bicep' = {
   name: 'app-registrations'
