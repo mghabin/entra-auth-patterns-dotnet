@@ -40,7 +40,7 @@ After deploying the cloud **dev** env (see
 [`deploy-cloud.md`](deploy-cloud.md)), the script
 `scripts/provision-apps.sh ENV=dev` whitelists the well-known **Azure CLI**
 (`04b07795-…`) and **VS Code** (`aebc6443-…`) public client IDs as
-allowed callers on `ftgo-dev-orderservice` and `ftgo-dev-restaurantservice`.
+allowed callers on `ftgo-dev-orders-api` and `ftgo-dev-restaurants-api`.
 
 > **Dev only.** ppe and prod do not whitelist these public clients —
 > they only accept tokens from the real workload identities (BFF + workers).
@@ -49,14 +49,14 @@ allowed callers on `ftgo-dev-orderservice` and `ftgo-dev-restaurantservice`.
 Acquire a user token and call the API:
 
 ```bash
-ORDERS_APPID=$(az ad app list --filter "displayName eq 'ftgo-dev-orderservice'" --query "[0].appId" -o tsv)
+ORDERS_APPID=$(az ad app list --filter "displayName eq 'ftgo-dev-orders-api'" --query "[0].appId" -o tsv)
 TOKEN=$(az account get-access-token --resource "api://${ORDERS_APPID}" --query accessToken -o tsv)
-ORDERS_FQDN=$(az containerapp show -g rg-ftgo-dev-eastus -n ftgo-dev-orderservice-eus --query properties.configuration.ingress.fqdn -o tsv)
+ORDERS_FQDN=$(az containerapp show -g rg-ftgo-dev-eastus -n ftgo-dev-orders-api-eus --query properties.configuration.ingress.fqdn -o tsv)
 
 curl -H "Authorization: Bearer $TOKEN" "https://${ORDERS_FQDN}/api/orders/system"
 ```
 
-The same pattern works for `ftgo-dev-restaurantservice`.
+The same pattern works for `ftgo-dev-restaurants-api`.
 
 ## 4. OIDC sign-in (browser flow)
 
@@ -80,12 +80,11 @@ service locally that you wish to export traces from.
 
 ## What about the credential demos (cert / FIC / secret / MI)?
 
-| Worker                         | Where it's real                                                   |
+| Pattern                        | Where it's real                                                   |
 |--------------------------------|-------------------------------------------------------------------|
-| **KitchenService** (MI)        | Cloud dev — runs as the Container App's system MI                 |
-| **AccountingService** (cert)   | Cloud dev — cert lives in Key Vault, fetched at startup           |
-| **DeliveryService** (FIC)      | GitHub Actions workflow `wi-demo.yml` — OIDC token exchange       |
-| **NotificationService** (secret) | Cloud dev — included as the **anti-pattern** for contrast       |
+| **MI** (`Ftgo.Kitchen.Worker`) | Cloud dev — runs as the Container App's system MI; calls Orders API with role `Orders.Process` |
+| **FIC** (`wi-demo.yml`)        | GitHub Actions workflow — OIDC token exchange, no stored secret   |
+| **Cert / secret**              | Documented in [`docs/credential-patterns/`](credential-patterns/) — not deployed (cert is a niche on-prem/HSM tool, secret is an anti-pattern) |
 
-All four are wired and run on every cloud deploy. The code is identical
-to what you'd ship to production.
+The MI demo runs on every cloud deploy. The FIC demo runs on its own
+schedule via `wi-demo.yml`. Both are production-grade.

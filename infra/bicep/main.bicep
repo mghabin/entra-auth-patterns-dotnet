@@ -26,6 +26,9 @@ param apiGatewayRedirectUri string = 'https://localhost:7101/signin-oidc'
 @description('SPA redirect URI for Scalar PKCE callback on the BFF.')
 param scalarRedirectUri string = 'https://localhost:7101/scalar/v1'
 
+@description('Map of worker MI key → principalId (system MI of the corresponding ACA app). Passed in by provision-apps.sh after reading azure.bicep outputs. Empty during a cold deploy — the script re-runs the tenant deploy with this populated once the ACA stack exists.')
+param workerMiPrincipalIds object = {}
+
 var effectivePrefix = '${prefix}-${environmentName}'
 
 module appRegistrations 'modules/app-registrations.bicep' = {
@@ -41,8 +44,9 @@ module appRegistrations 'modules/app-registrations.bicep' = {
 module permissionGrants 'modules/permission-grants.bicep' = {
   name: 'permission-grants'
   params: {
-    apps:    appRegistrations.outputs.apps
-    roleIds: appRegistrations.outputs.roleIds
+    apps:                  appRegistrations.outputs.apps
+    roleIds:               appRegistrations.outputs.roleIds
+    workerMiPrincipalIds:  workerMiPrincipalIds
   }
 }
 

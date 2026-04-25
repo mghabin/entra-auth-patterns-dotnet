@@ -3,7 +3,10 @@
 # One file, parameterized via PROJECT build-arg — same image recipe, different entry point per service.
 #
 # Build:
-#   docker build --build-arg PROJECT=Ftgo.ApiGateway -t ftgo-apigateway .
+#   docker build --build-arg PROJECT=Ftgo.ApiGateway     -t ftgo-apigateway .
+#   docker build --build-arg PROJECT=Ftgo.Orders.Api     -t ftgo-orders-api .
+#   docker build --build-arg PROJECT=Ftgo.Restaurants.Api -t ftgo-restaurants-api .
+#   docker build --build-arg PROJECT=Ftgo.Kitchen.Worker -t ftgo-kitchen-worker .
 #
 # Base images: distroless chiseled (~95 MB final image, runs as non-root uid 11654 by default).
 # Auth tokens / JWT validation are culture-invariant, so plain noble-chiseled (no ICU/tzdata) is sufficient.
@@ -27,24 +30,18 @@ COPY Directory.Build.props Directory.Packages.props .editorconfig EntraAuthPatte
 
 # Copy ALL service csprojs (small files; this layer is cached as long as none of them change).
 # Including all of them lets us share one restore layer across services that ProjectReference each other.
-COPY src/Ftgo.Auth/Ftgo.Auth.csproj                         src/Ftgo.Auth/
-COPY src/Ftgo.Auth.Client/Ftgo.Auth.Client.csproj           src/Ftgo.Auth.Client/
-COPY src/Ftgo.ApiGateway/Ftgo.ApiGateway.csproj             src/Ftgo.ApiGateway/
-COPY src/Ftgo.OrderService/Ftgo.OrderService.csproj         src/Ftgo.OrderService/
-COPY src/Ftgo.RestaurantService/Ftgo.RestaurantService.csproj src/Ftgo.RestaurantService/
-COPY src/Ftgo.KitchenService/Ftgo.KitchenService.csproj     src/Ftgo.KitchenService/
-COPY src/Ftgo.AccountingService/Ftgo.AccountingService.csproj src/Ftgo.AccountingService/
-COPY src/Ftgo.DeliveryService/Ftgo.DeliveryService.csproj   src/Ftgo.DeliveryService/
-COPY src/Ftgo.NotificationService/Ftgo.NotificationService.csproj src/Ftgo.NotificationService/
-COPY src/Ftgo.ApiGateway/packages.lock.json                 src/Ftgo.ApiGateway/
-COPY src/Ftgo.OrderService/packages.lock.json               src/Ftgo.OrderService/
-COPY src/Ftgo.RestaurantService/packages.lock.json          src/Ftgo.RestaurantService/
-COPY src/Ftgo.KitchenService/packages.lock.json             src/Ftgo.KitchenService/
-COPY src/Ftgo.AccountingService/packages.lock.json          src/Ftgo.AccountingService/
-COPY src/Ftgo.DeliveryService/packages.lock.json            src/Ftgo.DeliveryService/
-COPY src/Ftgo.NotificationService/packages.lock.json        src/Ftgo.NotificationService/
-COPY src/Ftgo.Auth/packages.lock.json                       src/Ftgo.Auth/
-COPY src/Ftgo.Auth.Client/packages.lock.json                src/Ftgo.Auth.Client/
+COPY src/Ftgo.Auth/Ftgo.Auth.csproj                           src/Ftgo.Auth/
+COPY src/Ftgo.Auth.Client/Ftgo.Auth.Client.csproj             src/Ftgo.Auth.Client/
+COPY src/Ftgo.ApiGateway/Ftgo.ApiGateway.csproj               src/Ftgo.ApiGateway/
+COPY src/Ftgo.Orders.Api/Ftgo.Orders.Api.csproj               src/Ftgo.Orders.Api/
+COPY src/Ftgo.Restaurants.Api/Ftgo.Restaurants.Api.csproj     src/Ftgo.Restaurants.Api/
+COPY src/Ftgo.Kitchen.Worker/Ftgo.Kitchen.Worker.csproj       src/Ftgo.Kitchen.Worker/
+COPY src/Ftgo.ApiGateway/packages.lock.json                   src/Ftgo.ApiGateway/
+COPY src/Ftgo.Orders.Api/packages.lock.json                   src/Ftgo.Orders.Api/
+COPY src/Ftgo.Restaurants.Api/packages.lock.json              src/Ftgo.Restaurants.Api/
+COPY src/Ftgo.Kitchen.Worker/packages.lock.json               src/Ftgo.Kitchen.Worker/
+COPY src/Ftgo.Auth/packages.lock.json                         src/Ftgo.Auth/
+COPY src/Ftgo.Auth.Client/packages.lock.json                  src/Ftgo.Auth.Client/
 
 RUN dotnet restore -a "${TARGETARCH:-amd64}" src/${PROJECT}/${PROJECT}.csproj
 # NOTE 1: --locked-mode intentionally NOT used here. CI (`ci.yml`) restores the

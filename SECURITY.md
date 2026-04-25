@@ -28,7 +28,7 @@ notes.
 The following items are **intentionally** present as teaching contrast
 and should not be copied into production code:
 
-- `Ftgo.NotificationService` uses a **client secret** — the worst
+- The **client secret** pattern (documented in [`docs/credential-patterns/client-secret.md`](docs/credential-patterns/client-secret.md), not deployed) — the worst
   credential type. The file documents why and points at better options.
 - Some package versions may carry `NU1902`/`NU1903` advisories; these
   surface as build warnings on purpose so they're visible. See the

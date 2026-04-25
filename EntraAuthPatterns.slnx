@@ -3,12 +3,9 @@
     <Project Path="src/Ftgo.Auth.Client/Ftgo.Auth.Client.csproj" />
     <Project Path="src/Ftgo.Auth/Ftgo.Auth.csproj" />
     <Project Path="src/Ftgo.ApiGateway/Ftgo.ApiGateway.csproj" />
-    <Project Path="src/Ftgo.OrderService/Ftgo.OrderService.csproj" />
-    <Project Path="src/Ftgo.RestaurantService/Ftgo.RestaurantService.csproj" />
-    <Project Path="src/Ftgo.KitchenService/Ftgo.KitchenService.csproj" />
-    <Project Path="src/Ftgo.AccountingService/Ftgo.AccountingService.csproj" />
-    <Project Path="src/Ftgo.DeliveryService/Ftgo.DeliveryService.csproj" />
-    <Project Path="src/Ftgo.NotificationService/Ftgo.NotificationService.csproj" />
+    <Project Path="src/Ftgo.Orders.Api/Ftgo.Orders.Api.csproj" />
+    <Project Path="src/Ftgo.Restaurants.Api/Ftgo.Restaurants.Api.csproj" />
+    <Project Path="src/Ftgo.Kitchen.Worker/Ftgo.Kitchen.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Ftgo.Auth.Tests/Ftgo.Auth.Tests.csproj" />
