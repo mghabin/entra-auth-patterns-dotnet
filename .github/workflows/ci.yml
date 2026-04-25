@@ -90,8 +90,8 @@ jobs:
           GH_OWNER:        mghabin
           GH_REPO:         entra-auth-patterns-dotnet
         run: |
-          az bicep build-params --file infra/bicep/main.bicepparam          --outfile /tmp/bicep-out/main.parameters.json
           for env in dev ppe prod; do
+            az bicep build-params --file "infra/bicep/main.${env}.bicepparam"      --outfile "/tmp/bicep-out/main.${env}.parameters.json"
             az bicep build-params --file "infra/bicep/bootstrap.${env}.bicepparam" --outfile "/tmp/bicep-out/bootstrap.${env}.parameters.json"
           done
           echo "all bicepparam files compiled clean"

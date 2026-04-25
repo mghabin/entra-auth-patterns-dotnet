@@ -22,7 +22,7 @@ not (the smaller it stays, the more it teaches).
 ## Local prerequisites
 
 - .NET SDK pinned in `global.json` (use `dotnet --version` to confirm).
-- `az` CLI + Bicep CLI for `scripts/deploy.sh` (Entra app provisioning via Microsoft.Graph Bicep extension).
+- `az` CLI + Bicep CLI for `scripts/provision-apps.sh` (Entra app provisioning via Microsoft.Graph Bicep extension).
 - `openssl` if you plan to (re)generate the AccountingService cert.
 
 ## Build, test, format

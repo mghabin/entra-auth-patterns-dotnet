@@ -1,96 +1,91 @@
-# Run the sample for free, end-to-end
+# Run / develop the sample locally
 
-You only need:
+The sample no longer provisions a separate set of `ftgo-local-*` app
+registrations. **Local development uses your own Azure CLI / VS Code
+identity** to call the cloud-deployed APIs — exactly the pattern you'd
+use in a real project (`DefaultAzureCredential` falls through to
+`AzureCliCredential` on a laptop and to `ManagedIdentityCredential` in
+Azure, with no code change).
 
-- a **Microsoft work or school Entra tenant** (your existing one is fine,
-  or a [free Microsoft 365 Developer tenant](https://developer.microsoft.com/microsoft-365/dev-program) which renews while in use),
-- a **GitHub account** (free Actions minutes are unlimited on public repos),
-- the .NET 10 SDK pinned by `global.json`,
-- `az` CLI, `jq`, `openssl`, `docker`, `gh`.
+For the full credential demos (cert, FIC, secret, MI), use the cloud
+**dev** environment — those flows are realistic only when the workload
+runs as a real service principal anyway.
 
-You do **not** need any paid Azure resources. Every flow has a free
-local equivalent (table at the bottom).
+## You need
 
-## 1. One-time bootstrap
+- a **Microsoft Entra tenant** (your work tenant, or a [free Microsoft 365
+  Developer tenant](https://developer.microsoft.com/microsoft-365/dev-program)),
+- the .NET 10 SDK (pinned by `global.json`),
+- `az`, `gh`, `docker`.
 
-```bash
-az login --allow-no-subscriptions --tenant <YOUR_TENANT>
-gh auth login        # for `gh secret set` later
-
-# Microsoft.Graph Bicep extension declaratively creates 7 app regs +
-# service principals + scopes/roles + admin-consented permissions.
-# A wrapper script then adds the federated credential, generates a
-# self-signed cert, and hydrates dotnet user-secrets for all 7 projects.
-# Idempotent — safe to re-run.
-./scripts/deploy.sh   # bash 4+; needs Owner at `/` (see notes below)
-```
-
-> **Heads-up — ARM access.** `az deployment tenant create` requires
-> Resource Manager RBAC even when deploying only `Microsoft.Graph/*`
-> resources. On a fresh dev tenant: portal.azure.com → **Microsoft Entra
-> ID → Properties → "Access management for Azure resources" = Yes**, then
-> `az role assignment create --assignee-object-id $(az ad signed-in-user
-> show --query id -o tsv) --role Owner --scope /`.
-
-## 2. Telemetry — Aspire Dashboard locally (free, OSS)
+## 1. Sign in
 
 ```bash
-docker compose -f tests/local/docker-compose.yml up -d
-open http://localhost:18888                     # web UI
-# OTLP endpoint the .NET services write to:     http://localhost:4317
+az login --tenant <YOUR_TENANT>
+gh auth login
 ```
 
-The .NET services already export OTLP via `AddEntraAuthTelemetry`. Set
-`OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` for each service.
-
-## 3. Build and run
+## 2. Build & test
 
 ```bash
 dotnet build EntraAuthPatterns.slnx
-
-# In separate terminals:
-dotnet run --project src/Ftgo.OrderService       # https://localhost:7102
-dotnet run --project src/Ftgo.RestaurantService  # https://localhost:7103
-dotnet run --project src/Ftgo.ApiGateway        # https://localhost:7101
+dotnet test  EntraAuthPatterns.slnx
 ```
 
-Acquire a user token (e.g. Postman → Authorization Code with PKCE
-against the `ftgo-local-apigateway` app reg, with redirect
-`https://localhost:7101/signin-oidc`) and exercise:
+Unit tests stub all Entra interactions and run offline.
+
+## 3. Hit the cloud APIs from your laptop
+
+After deploying the cloud **dev** env (see
+[`deploy-cloud.md`](deploy-cloud.md)), the script
+`scripts/provision-apps.sh ENV=dev` whitelists the well-known **Azure CLI**
+(`04b07795-…`) and **VS Code** (`aebc6443-…`) public client IDs as
+allowed callers on `ftgo-dev-orderservice` and `ftgo-dev-restaurantservice`.
+
+> **Dev only.** ppe and prod do not whitelist these public clients —
+> they only accept tokens from the real workload identities (BFF + workers).
+> Laptop-issued tokens are by design a dev-env affordance.
+
+Acquire a user token and call the API:
 
 ```bash
-TOKEN=...
-curl -k -H "Authorization: Bearer $TOKEN" https://localhost:7101/api/checkout/via-obo
-curl -k -H "Authorization: Bearer $TOKEN" https://localhost:7101/api/checkout/via-s2s
-curl -k -H "Authorization: Bearer $TOKEN" https://localhost:7101/api/checkout/via-s2s-multitenant
+ORDERS_APPID=$(az ad app list --filter "displayName eq 'ftgo-dev-orderservice'" --query "[0].appId" -o tsv)
+TOKEN=$(az account get-access-token --resource "api://${ORDERS_APPID}" --query accessToken -o tsv)
+ORDERS_FQDN=$(az containerapp show -g rg-ftgo-dev-eastus -n ftgo-dev-orderservice-eus --query properties.configuration.ingress.fqdn -o tsv)
+
+curl -H "Authorization: Bearer $TOKEN" "https://${ORDERS_FQDN}/api/orders/system"
 ```
 
-## 4. Run the workers (one at a time)
+The same pattern works for `ftgo-dev-restaurantservice`.
 
-| Worker                       | How to run for free                                                                 |
-|------------------------------|--------------------------------------------------------------------------------------|
-| **Ftgo.KitchenService** (MI) | Locally `az login` makes `DefaultAzureCredential` work; in production this is MI.   |
-| **Ftgo.AccountingService** (cert) | `scripts/new-cert.sh` creates the .pfx and uploads the public key. In prod the worker reads it from Key Vault via managed identity; for local dev set `KeyVault:LocalPfxPath` (and optionally `KeyVault:LocalPfxPassword`) in user-secrets to point at the .pfx — Key Vault is then bypassed entirely. |
-| **Ftgo.DeliveryService** (FIC)   | Run the GitHub Actions workflow `.github/workflows/wi-demo.yml` — it logs in via OIDC and acquires a token, no secret. |
-| **Ftgo.NotificationService** (secret) | `dotnet user-secrets set` the secret. Included as the **anti-pattern** for contrast — don't adopt this in real systems. |
+## 4. OIDC sign-in (browser flow)
+
+OIDC sign-in needs a confidential client with a registered redirect URI,
+which only the deployed BFF has. Test it in the cloud:
+
+```
+https://ftgo-dev-apigateway-eus.<random>.eastus.azurecontainerapps.io/scalar/v1
+```
+
+## 5. Telemetry — Aspire Dashboard locally (optional)
 
 ```bash
-dotnet run --project src/Ftgo.KitchenService
-dotnet run --project src/Ftgo.AccountingService
-dotnet run --project src/Ftgo.NotificationService
-gh workflow run wi-demo.yml      # workload identity worker
+docker compose -f tests/local/docker-compose.yml up -d
+open http://localhost:18888
+# OTLP endpoint: http://localhost:4317
 ```
 
-## 5. Production swaps (free → paid, one-line each)
+Set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` if you run a
+service locally that you wish to export traces from.
 
-| Local (free)                              | Production swap                                |
-|-------------------------------------------|------------------------------------------------|
-| `az login` (Azure CLI cred chain)         | Real Managed Identity on App Service / AKS pod |
-| Aspire Dashboard via docker-compose       | Application Insights / any OTLP backend        |
-| GitHub OIDC federated credential          | AKS workload-identity OIDC                     |
-| Self-signed cert in `./.certs/`           | Cert in Azure Key Vault (auto-rotated)         |
-| `dotnet user-secrets`                     | Key Vault references / env vars from K8s       |
-| GitHub Container Registry (ghcr.io)       | ACR (Premium has geo-replication, content trust) |
+## What about the credential demos (cert / FIC / secret / MI)?
 
-The .NET code is **identical** across both columns — only configuration
-changes. That's the whole point of `Ftgo.Auth`.
+| Worker                         | Where it's real                                                   |
+|--------------------------------|-------------------------------------------------------------------|
+| **KitchenService** (MI)        | Cloud dev — runs as the Container App's system MI                 |
+| **AccountingService** (cert)   | Cloud dev — cert lives in Key Vault, fetched at startup           |
+| **DeliveryService** (FIC)      | GitHub Actions workflow `wi-demo.yml` — OIDC token exchange       |
+| **NotificationService** (secret) | Cloud dev — included as the **anti-pattern** for contrast       |
+
+All four are wired and run on every cloud deploy. The code is identical
+to what you'd ship to production.

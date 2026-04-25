@@ -16,9 +16,9 @@ param tenantId string
 @maxLength(16)
 param prefix string = 'ftgo'
 
-@description('Logical environment name. Always suffixed onto the prefix (ftgo-local-*, ftgo-dev-*, …) so each env owns an isolated set of app regs.')
-@allowed([ 'local', 'dev', 'ppe', 'prod' ])
-param environmentName string = 'local'
+@description('Logical environment name. Always suffixed onto the prefix (ftgo-dev-*, ftgo-ppe-*, ftgo-prod-*) so each env owns an isolated set of app regs.')
+@allowed([ 'dev', 'ppe', 'prod' ])
+param environmentName string = 'dev'
 
 @description('OIDC redirect URI registered on the BFF for local-dev sign-in.')
 param apiGatewayRedirectUri string = 'https://localhost:7101/signin-oidc'
