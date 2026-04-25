@@ -46,14 +46,21 @@ COPY src/Ftgo.NotificationService/packages.lock.json        src/Ftgo.Notificatio
 COPY src/Ftgo.Auth/packages.lock.json                       src/Ftgo.Auth/
 COPY src/Ftgo.Auth.Client/packages.lock.json                src/Ftgo.Auth.Client/
 
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
-    dotnet restore -a "${TARGETARCH:-amd64}" src/${PROJECT}/${PROJECT}.csproj
-# NOTE: --locked-mode intentionally NOT used here. CI (`ci.yml`) restores the
+RUN dotnet restore -a "${TARGETARCH:-amd64}" src/${PROJECT}/${PROJECT}.csproj
+# NOTE 1: --locked-mode intentionally NOT used here. CI (`ci.yml`) restores the
 # whole solution with --locked-mode on every PR/push, so lock-file integrity
 # is already enforced before any image is built. Adding it here would conflict
 # with the per-RID restore (lock files don't include runtime identifiers, so
 # `-a $TARGETARCH` produces an RID set the lock file never recorded → NU1004).
-# Matches dotnet/dotnet-docker official samples.
+# NOTE 2: No `--mount=type=cache` for /root/.nuget/packages. With GHA layer
+# cache (cache-from/to=type=gha), a layer-cache HIT on this RUN means BuildKit
+# doesn't execute it, so a host-side cache mount never gets populated for that
+# build. The publish stage's `--no-restore` would then fail with NETSDK1064
+# (analyzer packages like AsyncFixer / Meziantou with PrivateAssets="all" are
+# resolved at publish time from /root/.nuget/packages). Letting packages live
+# in the image layer (canonical dotnet/dotnet-docker samples pattern) means
+# they flow naturally to the publish stage via `FROM restore AS publish` and
+# are persisted across CI runs by GHA layer cache itself.
 
 # ─── Stage 2: publish ───
 FROM restore AS publish
@@ -62,13 +69,7 @@ ARG TARGETARCH
 ARG BUILD_GIT_SHA=local
 ARG BUILD_VERSION=0.0.0-local
 COPY src/ src/
-# Explicit id=nuget on the cache mount ensures BuildKit shares the cache contents
-# with the restore stage above (without an explicit id, BuildKit may scope the
-# mount per-stage, and `dotnet publish --no-restore` then can't find analyzer
-# packages like AsyncFixer → NETSDK1064). Pattern from dotnet/dotnet-docker
-# issue #3353.
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
-    dotnet publish src/${PROJECT}/${PROJECT}.csproj \
+RUN dotnet publish src/${PROJECT}/${PROJECT}.csproj \
         -a "${TARGETARCH:-amd64}" \
         --no-restore \
         -c Release \
