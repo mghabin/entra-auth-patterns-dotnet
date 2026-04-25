@@ -9,6 +9,9 @@
 # Auth tokens / JWT validation are culture-invariant, so plain noble-chiseled (no ICU/tzdata) is sufficient.
 
 ARG PROJECT
+# TARGETARCH is auto-populated by buildx for multi-arch builds; we apply a safe
+# default at each `dotnet` use site (${TARGETARCH:-amd64}) so single-arch builds
+# without an explicit --platform still work. Matches dotnet/dotnet-docker samples.
 ARG TARGETARCH
 
 # ─── Stage 1: restore (cached unless csprojs or central package files change) ───
@@ -42,7 +45,7 @@ COPY src/Ftgo.Auth/packages.lock.json                       src/Ftgo.Auth/
 COPY src/Ftgo.Auth.Client/packages.lock.json                src/Ftgo.Auth.Client/
 
 RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet restore -a $TARGETARCH --locked-mode src/${PROJECT}/${PROJECT}.csproj
+    dotnet restore -a "${TARGETARCH:-amd64}" --locked-mode src/${PROJECT}/${PROJECT}.csproj
 
 # ─── Stage 2: publish ───
 FROM restore AS publish
@@ -53,7 +56,7 @@ ARG BUILD_VERSION=0.0.0-local
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.nuget/packages \
     dotnet publish src/${PROJECT}/${PROJECT}.csproj \
-        -a $TARGETARCH \
+        -a "${TARGETARCH:-amd64}" \
         --no-restore \
         -c Release \
         -o /app \
