@@ -1,0 +1,39 @@
+# Build / cache artifacts
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.idea/
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Local dev runtime
+.logs/
+.certs/
+
+# Compiled IaC ARM output
+infra/bicep/main.json
+infra/bicep/*.json
+
+# Docs / scripts not needed at build time
+docs/
+README.md
+LICENSE
+CONTRIBUTING.md
+SECURITY.md
+*.md
+
+# Tests aren't part of the runtime image
+tests/
+
+# Misc
+**/*.pfx
+**/*.key
+**/*.pem
+**/.env
+**/.env.*
+**/appsettings.*.local.json
+TestResults/
+coverage/

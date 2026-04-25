@@ -491,6 +491,19 @@
           "OpenTelemetry.Api": "1.15.3"
         }
       },
+      "OpenTelemetry.PersistentStorage.Abstractions": {
+        "type": "Transitive",
+        "resolved": "1.0.2",
+        "contentHash": "QuBc6e7M4Skvbc+eTQGSmrcoho7lSkHLT5ngoSsVeeT8OXLpSUETNcuRPW8F5drTPTzzTKQ98C5AhKO/pjpTJg=="
+      },
+      "OpenTelemetry.PersistentStorage.FileSystem": {
+        "type": "Transitive",
+        "resolved": "1.0.2",
+        "contentHash": "ys0l9vL0/wOV9p/iuyDeemjX+d8iH4yjaYA1IcmyQUw0xsxx0I3hQm7tN3FnuRPsmPtrohiLtp31hO1BcrhQ+A==",
+        "dependencies": {
+          "OpenTelemetry.PersistentStorage.Abstractions": "1.0.2"
+        }
+      },
       "Polly.Core": {
         "type": "Transitive",
         "resolved": "8.4.2",
@@ -549,6 +562,7 @@
       "ftgo.auth.client": {
         "type": "Project",
         "dependencies": {
+          "Azure.Monitor.OpenTelemetry.Exporter": "[1.5.0, )",
           "Microsoft.Extensions.Hosting": "[10.0.7, )",
           "Microsoft.Extensions.Http": "[10.0.7, )",
           "Microsoft.Extensions.Http.Resilience": "[10.5.0, )",
@@ -558,6 +572,18 @@
           "OpenTelemetry.Extensions.Hosting": "[1.15.3, )",
           "OpenTelemetry.Instrumentation.Http": "[1.15.1, )",
           "OpenTelemetry.Instrumentation.Runtime": "[1.15.1, )"
+        }
+      },
+      "Azure.Monitor.OpenTelemetry.Exporter": {
+        "type": "CentralTransitive",
+        "requested": "[1.5.0, )",
+        "resolved": "1.5.0",
+        "contentHash": "7YgW82V13PwhjrlaN2Nbu9UIvYMzZxjgV9TYqK34PK+81IWsDwPO3vBhyeHYpDBwKWm7wqHp1c3VVX5DN4G2WA==",
+        "dependencies": {
+          "Azure.Core": "1.50.0",
+          "OpenTelemetry": "1.14.0",
+          "OpenTelemetry.Extensions.Hosting": "1.14.0",
+          "OpenTelemetry.PersistentStorage.FileSystem": "1.0.2"
         }
       },
       "Microsoft.Extensions.Http": {

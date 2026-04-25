@@ -1,0 +1,54 @@
+# Cloud env safety net: nightly scale dev/ppe container apps to min=0/max=3 so a misconfigured
+# bicepparam (or manual `az` poke) can't keep instances pinned overnight and rack up bills.
+# Idempotent. Skips prod intentionally.
+name: cd-cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scale-down:
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, ppe]
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Reset min/max replicas in rg-ftgo-${{ matrix.env }}-eastus
+        run: |
+          set -euo pipefail
+          RG="rg-ftgo-${{ matrix.env }}-eastus"
+          if ! az group show --name "$RG" --only-show-errors --output none 2>/dev/null; then
+            echo "Resource group $RG does not exist — skipping."
+            exit 0
+          fi
+          APPS=$(az containerapp list --resource-group "$RG" --query '[].name' -o tsv --only-show-errors)
+          if [ -z "$APPS" ]; then
+            echo "No container apps in $RG — skipping."
+            exit 0
+          fi
+          for app in $APPS; do
+            echo "Scaling $app → min=0 max=3"
+            az containerapp update \
+              --name "$app" \
+              --resource-group "$RG" \
+              --min-replicas 0 \
+              --max-replicas 3 \
+              --only-show-errors \
+              --output none
+          done

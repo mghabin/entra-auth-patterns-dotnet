@@ -11,9 +11,9 @@ targetScope = 'tenant'
 @maxLength(36)
 param tenantId string
 
-@description('Prefix applied to every app registration display name (e.g. "ftgo" → "ftgo-orderservice").')
+@description('Prefix applied to every app registration display name (e.g. "ftgo" → "ftgo-orderservice"). When called from the cloud envs the orchestrator passes "ftgo-{env}".')
 @minLength(2)
-@maxLength(16)
+@maxLength(24)
 param prefix string
 
 @description('OIDC redirect URI registered on the BFF (api gateway) for local-dev sign-in.')

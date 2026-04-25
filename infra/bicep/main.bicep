@@ -16,17 +16,23 @@ param tenantId string
 @maxLength(16)
 param prefix string = 'ftgo'
 
+@description('Logical environment name. "local" keeps the existing local-dev names (ftgo-*); cloud envs (dev/ppe/prod) suffix it (ftgo-dev-*).')
+@allowed([ 'local', 'dev', 'ppe', 'prod' ])
+param environmentName string = 'local'
+
 @description('OIDC redirect URI registered on the BFF for local-dev sign-in.')
 param apiGatewayRedirectUri string = 'https://localhost:7101/signin-oidc'
 
 @description('SPA redirect URI for Scalar PKCE callback on the BFF.')
 param scalarRedirectUri string = 'https://localhost:7101/scalar/v1'
 
+var effectivePrefix = environmentName == 'local' ? prefix : '${prefix}-${environmentName}'
+
 module appRegistrations 'modules/app-registrations.bicep' = {
   name: 'app-registrations'
   params: {
     tenantId:              tenantId
-    prefix:                prefix
+    prefix:                effectivePrefix
     apiGatewayRedirectUri: apiGatewayRedirectUri
     scalarRedirectUri:     scalarRedirectUri
   }
@@ -40,7 +46,8 @@ module permissionGrants 'modules/permission-grants.bicep' = {
   }
 }
 
-output tenantId string = tenantId
-output apps     object = appRegistrations.outputs.apps
-output roleIds  object = appRegistrations.outputs.roleIds
+output tenantId        string = tenantId
+output environmentName string = environmentName
+output apps            object = appRegistrations.outputs.apps
+output roleIds         object = appRegistrations.outputs.roleIds
 
