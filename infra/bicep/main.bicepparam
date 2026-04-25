@@ -13,3 +13,4 @@ using 'main.bicep'
 param tenantId             = readEnvironmentVariable('AZURE_TENANT_ID')
 param prefix               = readEnvironmentVariable('FTGO_PREFIX',                'ftgo')
 param apiGatewayRedirectUri = readEnvironmentVariable('FTGO_GATEWAY_REDIRECT_URI', 'https://localhost:7101/signin-oidc')
+param scalarRedirectUri     = readEnvironmentVariable('FTGO_SCALAR_REDIRECT_URI',  'https://localhost:7101/scalar/v1')

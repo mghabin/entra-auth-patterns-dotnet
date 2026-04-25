@@ -12,6 +12,7 @@ builder.Services.AddEntraAuth(builder.Configuration, auth =>
 });
 builder.Services.AddEntraAuthWebTelemetry("Ftgo.ApiGateway");
 builder.Services.AddEntraAuthProblemDetails();
+builder.Services.AddEntraAuthOpenApi(builder.Configuration, "orders.read");
 
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddControllers();
@@ -21,4 +22,5 @@ app.UseEntraAuthProblemDetails();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapEntraAuthScalar(builder.Configuration, "orders.read");
 await app.RunAsync();

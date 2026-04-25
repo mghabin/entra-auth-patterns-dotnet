@@ -2,10 +2,12 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Ftgo.Auth.Tests" />
     <ProjectReference Include="..\Ftgo.Auth.Client\Ftgo.Auth.Client.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.Identity.Web" />
     <PackageReference Include="Microsoft.Identity.Web.DownstreamApi" />
     <PackageReference Include="Microsoft.IdentityModel.Validators" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="Scalar.AspNetCore" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

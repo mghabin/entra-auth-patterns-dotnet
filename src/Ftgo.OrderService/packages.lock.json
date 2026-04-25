@@ -308,10 +308,12 @@
         "type": "Project",
         "dependencies": {
           "Ftgo.Auth.Client": "[1.0.0, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.7, )",
           "Microsoft.Identity.Web": "[4.8.0, )",
           "Microsoft.Identity.Web.DownstreamApi": "[4.8.0, )",
           "Microsoft.IdentityModel.Validators": "[8.17.0, )",
-          "OpenTelemetry.Instrumentation.AspNetCore": "[1.15.2, )"
+          "OpenTelemetry.Instrumentation.AspNetCore": "[1.15.2, )",
+          "Scalar.AspNetCore": "[2.14.4, )"
         }
       },
       "ftgo.auth.client": {
@@ -465,6 +467,12 @@
         "dependencies": {
           "OpenTelemetry.Api": "[1.15.3, 2.0.0)"
         }
+      },
+      "Scalar.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[2.14.4, )",
+        "resolved": "2.14.4",
+        "contentHash": "PyuqLRi7JXyTJm/rh+IWCA4Fct1SlZuWrdYiui5hiaBuSY88+roc4eWKfYaE6zrupBIwnEP8pJLe4ifvU7HtZA=="
       }
     }
   }

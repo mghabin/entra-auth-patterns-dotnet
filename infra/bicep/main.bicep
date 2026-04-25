@@ -19,12 +19,16 @@ param prefix string = 'ftgo'
 @description('OIDC redirect URI registered on the BFF for local-dev sign-in.')
 param apiGatewayRedirectUri string = 'https://localhost:7101/signin-oidc'
 
+@description('SPA redirect URI for Scalar PKCE callback on the BFF.')
+param scalarRedirectUri string = 'https://localhost:7101/scalar/v1'
+
 module appRegistrations 'modules/app-registrations.bicep' = {
   name: 'app-registrations'
   params: {
     tenantId:              tenantId
     prefix:                prefix
     apiGatewayRedirectUri: apiGatewayRedirectUri
+    scalarRedirectUri:     scalarRedirectUri
   }
 }
 

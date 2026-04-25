@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# scripts/new-cert.sh — generate a self-signed cert for ftgo-accountingservice and upload the
-# public key to its app registration. Idempotent. The .pfx stays local; do NOT commit it.
+# scripts/new-cert.sh — generate a self-signed cert for an app registration and upload the
+# public key. Idempotent. The .pfx stays local; do NOT commit it.
+#
+# Usage:  APP_NAME=ftgo-apigateway ./scripts/new-cert.sh
 #
 # Prereqs: openssl, az CLI logged in.
 
@@ -48,12 +50,3 @@ echo "Cert ready."
 echo "  PFX:        $PFX"
 echo "  Thumbprint: $THUMB"
 echo "============================================================"
-cat <<EOF
-
-# Local dev: AccountingService reads the cert directly from this PFX (already wired by deploy.sh).
-dotnet user-secrets --project src/Ftgo.AccountingService set "KeyVault:LocalPfxPath" "$(cd "$(dirname "$PFX")" && pwd)/$(basename "$PFX")"
-
-# Production: switch to Key Vault.
-# dotnet user-secrets --project src/Ftgo.AccountingService set "KeyVault:Uri"      "https://YOUR-KV.vault.azure.net/"
-# dotnet user-secrets --project src/Ftgo.AccountingService set "KeyVault:CertName" "${APP_NAME}"
-EOF

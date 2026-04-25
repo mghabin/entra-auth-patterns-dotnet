@@ -99,6 +99,21 @@ echo "    accountingservice   = $ACCT_APP"
 echo "    deliveryservice     = $DELIV_APP"
 echo "    notificationservice = $NOTIF_APP"
 
+# Set identifierUris to `api://{appId}` on the public-facing apps. Bicep can't self-reference an app's
+# own appId during creation, so we patch it here. Idempotent — re-applies the same value on every run.
+echo
+echo "==> Setting identifierUris on public-facing apps"
+for app in "$GATE_APP" "$ORDER_APP" "$REST_APP"; do
+  current=$(az ad app show --id "$app" --query 'identifierUris' -o json)
+  desired="[\"api://$app\"]"
+  if [[ "$current" != "$desired" ]]; then
+    az ad app update --id "$app" --identifier-uris "api://$app" --output none
+    echo "    $app ← api://$app"
+  else
+    echo "    $app already set"
+  fi
+done
+
 # Bicep-Graph 0.2.0-preview rejects federatedIdentityCredentials at runtime; do it via az CLI.
 echo
 echo "==> Federated credential (DeliveryService → GitHub OIDC)"
@@ -121,8 +136,16 @@ fi
 
 echo
 echo "==> Self-signed cert for AccountingService"
-ACCT_APP="$ACCT_APP" "$HERE/new-cert.sh"
-PFX_PATH="$ROOT/.certs/ftgo-accountingservice.pfx"
+APP_NAME=ftgo-accountingservice "$HERE/new-cert.sh"
+ACCT_PFX="$ROOT/.certs/ftgo-accountingservice.pfx"
+
+# ApiGateway also needs a credential for downstream OBO. In Azure it uses a federated assertion via
+# managed identity (`SignedAssertionFromManagedIdentity`); on a laptop there's no IMDS, so we generate
+# a local cert and override `AzureAd:ClientCredentials` via user-secrets to source from disk.
+echo
+echo "==> Self-signed cert for ApiGateway (local-dev OBO)"
+APP_NAME=ftgo-apigateway "$HERE/new-cert.sh"
+GATE_PFX="$ROOT/.certs/ftgo-apigateway.pfx"
 
 echo
 echo "==> Hydrating dotnet user-secrets for 7 projects"
@@ -137,6 +160,9 @@ done
 
 set_secret Ftgo.ApiGateway "AzureAd:TenantId" "$TENANT_ID"
 set_secret Ftgo.ApiGateway "AzureAd:ClientId" "$GATE_APP"
+set_secret Ftgo.ApiGateway "AzureAd:ClientCredentials:0:SourceType"           "Path"
+set_secret Ftgo.ApiGateway "AzureAd:ClientCredentials:0:CertificateDiskPath"  "$GATE_PFX"
+set_secret Ftgo.ApiGateway "AzureAd:ClientCredentials:0:CertificatePassword"  ""
 set_secret Ftgo.ApiGateway "DownstreamApis:Orders:Scopes:0"              "api://${ORDER_APP}/orders.read"
 set_secret Ftgo.ApiGateway "DownstreamApis:Orders:AppPermissionScopes:0" "api://${ORDER_APP}/.default"
 set_secret Ftgo.ApiGateway "DownstreamApis:Restaurants:AppPermissionScopes:0" "api://${REST_APP}/.default"
@@ -147,10 +173,12 @@ set_secret Ftgo.OrderService "EntraAuth:AllowedClientApps:0" "$GATE_APP"
 
 set_secret Ftgo.RestaurantService "AzureAd:TenantId" "$TENANT_ID"
 set_secret Ftgo.RestaurantService "AzureAd:ClientId" "$REST_APP"
+set_secret Ftgo.RestaurantService "EntraAuth:AllowedClientApps:0" "$GATE_APP"
+set_secret Ftgo.RestaurantService "EntraAuth:AllowedTenantIds:0"  "$TENANT_ID"
 
 set_secret Ftgo.AccountingService "AzureAd:TenantId" "$TENANT_ID"
 set_secret Ftgo.AccountingService "AzureAd:ClientId" "$ACCT_APP"
-set_secret Ftgo.AccountingService "KeyVault:LocalPfxPath" "$PFX_PATH"
+set_secret Ftgo.AccountingService "KeyVault:LocalPfxPath" "$ACCT_PFX"
 
 set_secret Ftgo.KitchenService "AzureAd:TenantId" "$TENANT_ID"
 
