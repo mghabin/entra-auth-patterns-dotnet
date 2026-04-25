@@ -80,6 +80,24 @@ echo "==> tenant       : ${TENANT_ID}"
 echo "==> env          : ${ENV}"
 echo
 
+# ---------- Resource provider registration (one-time per subscription, idempotent) ----------
+# New Azure subscriptions don't auto-register every RP; first deploy that touches an
+# unregistered namespace fails with MissingSubscriptionRegistration. Registration is
+# sub-scoped + asynchronous; we kick off all required RPs in parallel and don't wait
+# (registration completes within seconds, well before bootstrap.bicep runs).
+RPS=(
+  Microsoft.KeyVault
+  Microsoft.OperationalInsights   # Log Analytics
+  Microsoft.Insights              # App Insights
+  Microsoft.App                   # Container Apps
+  Microsoft.ManagedIdentity       # UAMI (usually pre-registered, but harmless)
+)
+echo "==> Registering resource providers (idempotent): ${RPS[*]}"
+for rp in "${RPS[@]}"; do
+  az provider register --namespace "$rp" --only-show-errors --output none &
+done
+wait
+
 # ---------- Azure side: infra/bicep/bootstrap.bicep ----------
 DEPLOY_NAME="bootstrap-${ENV}-$(date +%Y%m%d%H%M%S)"
 echo "==> Deploying infra/bicep/bootstrap.bicep ($DEPLOY_NAME)"

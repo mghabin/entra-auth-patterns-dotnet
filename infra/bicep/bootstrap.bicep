@@ -31,11 +31,11 @@ var roles = {
   UserAccessAdministrator: '18d7d88d-d35e-4fb5-a5c3-7773c20a72d9'
 }
 
-// Prod also needs User Access Administrator so the deploy pipeline can grant
-// Key Vault RBAC to the per-app managed identities created by azure.bicep.
-var roleIds = environmentName == 'prod'
-  ? [ roles.Contributor, roles.UserAccessAdministrator ]
-  : [ roles.Contributor ]
+// All envs need User Access Administrator (RG-scoped) so the deploy pipeline
+// can grant Key Vault RBAC to the per-app managed identities created by
+// azure.bicep (modules/key-vault-rbac.bicep). The role is scoped to this RG
+// only — the UAMI cannot assign roles outside its environment.
+var roleIds = [ roles.Contributor, roles.UserAccessAdministrator ]
 
 var tags = {
   environment: environmentName
