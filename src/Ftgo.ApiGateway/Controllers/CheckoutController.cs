@@ -26,7 +26,7 @@ public sealed class CheckoutController(IDownstreamApi downstream, IConfiguration
         var resp = await downstream.CallApiForAppAsync("Orders", o =>
         {
             o.RelativePath = "api/orders/system";
-            o.Scopes       = AppScopes("Orders");
+            o.Scopes = AppScopes("Orders");
         });
         var body = await resp.Content.ReadAsStringAsync();
         return Content(body, "application/json");
@@ -39,7 +39,7 @@ public sealed class CheckoutController(IDownstreamApi downstream, IConfiguration
         var resp = await downstream.CallApiForAppAsync("Restaurants", o =>
         {
             o.RelativePath = "api/restaurants/system";
-            o.Scopes       = AppScopes("Restaurants");
+            o.Scopes = AppScopes("Restaurants");
         });
         var body = await resp.Content.ReadAsStringAsync();
         return Content(body, "application/json");
