@@ -21,7 +21,9 @@ ARG TARGETARCH
 WORKDIR /src
 
 # Central props affect every restore — copy first.
-COPY Directory.Build.props Directory.Packages.props EntraAuthPatterns.slnx ./
+# .editorconfig is required so analyzers (Meziantou, etc.) honor per-rule
+# severity overrides during `dotnet publish` inside the container.
+COPY Directory.Build.props Directory.Packages.props .editorconfig EntraAuthPatterns.slnx ./
 
 # Copy ALL service csprojs (small files; this layer is cached as long as none of them change).
 # Including all of them lets us share one restore layer across services that ProjectReference each other.
