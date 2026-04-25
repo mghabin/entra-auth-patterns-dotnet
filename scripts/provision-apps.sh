@@ -117,12 +117,11 @@ for short in "${!SVC_TO_BICEP_KEY[@]}"; do
     app_obj_id=$(az ad app show --id "$app_id" --query id -o tsv --only-show-errors 2>/dev/null || echo "")
   fi
   fqdn=$(jq -r --arg k "$short" '.[$k].fqdn // empty' <<<"$SERVICES")
-  mi_client_id=$(az containerapp show --name "ftgo-${ENV}-${short}" --resource-group "$RG_NAME" \
-    --query 'identity.principalId' -o tsv --only-show-errors 2>/dev/null || true)
+  mi_principal_id=$(jq -r --arg k "$short" '.[$k].principalId // empty' <<<"$SERVICES")
   # The MI clientId is what we need as the FIC subject. principalId is the SP objectId — we need
-  # to look up the matching clientId.
-  mi_principal_id="$mi_client_id"
-  if [[ -n "$mi_principal_id" && "$mi_principal_id" != "None" ]]; then
+  # to look up the matching clientId via Graph.
+  mi_client_id=""
+  if [[ -n "$mi_principal_id" && "$mi_principal_id" != "null" ]]; then
     mi_client_id=$(az ad sp show --id "$mi_principal_id" --query appId -o tsv --only-show-errors 2>/dev/null || echo "")
   fi
 
