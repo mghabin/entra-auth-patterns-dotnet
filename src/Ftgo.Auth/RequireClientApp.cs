@@ -5,10 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ftgo.Auth;
 
-/// <summary>
-/// Authorization requirement that enforces an <c>azp</c>/<c>appid</c> allow-list
-/// for app-only endpoints. Requires the token to carry no delegated scope (<c>scp</c>).
-/// </summary>
+/// <summary>Authorization requirement enforcing an <c>azp</c>/<c>appid</c> allow-list and rejecting any token that carries <c>scp</c>.</summary>
 public sealed class RequireClientAppRequirement : IAuthorizationRequirement
 {
     public IReadOnlyCollection<string>? AllowedClientApps { get; }
@@ -29,7 +26,7 @@ internal sealed class RequireClientAppHandler(IOptionsMonitor<EntraAuthOptions> 
             return Task.CompletedTask;
         }
 
-        // App-only token: must NOT carry a delegated scope.
+        // Defense in depth: a true app-only token never carries scp; reject if present.
         if (context.User.HasClaim(c =>
                 string.Equals(c.Type, "scp", StringComparison.Ordinal) ||
                 string.Equals(c.Type, "http://schemas.microsoft.com/identity/claims/scope", StringComparison.Ordinal)))
@@ -55,12 +52,7 @@ internal sealed class RequireClientAppHandler(IOptionsMonitor<EntraAuthOptions> 
     }
 }
 
-/// <summary>
-/// Attribute sugar for the <c>EntraAuth:RequireClientApp</c> authorization policy.
-/// Place on a controller or action: <c>[RequireClientApp]</c>. The allow-list is
-/// resolved from <see cref="EntraAuthOptions.AllowedClientApps"/>; per-endpoint
-/// pinning is intentionally not supported here to keep the policy single-sourced.
-/// </summary>
+/// <summary>Sugar for the <c>EntraAuth:RequireClientApp</c> policy. Allow-list comes from <see cref="EntraAuthOptions.AllowedClientApps"/>; per-endpoint pinning is intentionally not supported.</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
 public sealed class RequireClientAppAttribute : AuthorizeAttribute
 {

@@ -11,24 +11,16 @@ namespace Ftgo.ApiGateway.Controllers;
 [Authorize]
 public sealed class CheckoutController(IDownstreamApi downstream) : ControllerBase
 {
-    /// <summary>
-    /// User → ApiGateway → OBO → OrderService.
-    /// Requires the inbound user token to carry scp=orders.read.
-    /// </summary>
     [HttpGet("via-obo")]
     [RequiredScope("orders.read")]
     public async Task<IActionResult> ViaObo()
     {
-        // Microsoft.Identity.Web does the OBO exchange transparently.
+        // Microsoft.Identity.Web performs the OBO exchange transparently inside CallApiForUserAsync.
         var resp = await downstream.CallApiForUserAsync("Orders", o => o.RelativePath = "api/orders/whoami");
         var body = await resp.Content.ReadAsStringAsync();
         return Content(body, "application/json");
     }
 
-    /// <summary>
-    /// ApiGateway → OrderService as ApiGateway itself (S2S app token, client_credentials).
-    /// Use this when there is no user in the request (background refresh, system call).
-    /// </summary>
     [HttpGet("via-s2s")]
     [RequiredScope("orders.read")]
     public async Task<IActionResult> ViaS2S()
@@ -38,9 +30,6 @@ public sealed class CheckoutController(IDownstreamApi downstream) : ControllerBa
         return Content(body, "application/json");
     }
 
-    /// <summary>
-    /// ApiGateway → RestaurantService (multi-tenant, app-only) as ApiGateway itself.
-    /// </summary>
     [HttpGet("via-s2s-multitenant")]
     [RequiredScope("orders.read")]
     public async Task<IActionResult> ViaS2SMultiTenant()

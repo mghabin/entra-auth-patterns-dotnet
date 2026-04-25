@@ -3,29 +3,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Ftgo.Auth;
 
-/// <summary>
-/// Abstraction over "get me an access token for this scope". Each worker implements it
-/// with its preferred credential (MI, Cert, FIC, Secret) and is otherwise identical.
-/// </summary>
+/// <summary>Returns an access token for the supplied scope.</summary>
 public interface IAppTokenProvider
 {
-    /// <summary>
-    /// Acquires an app-only access token for the supplied scope.
-    /// </summary>
-    /// <param name="scope">
-    /// Fully-qualified resource scope (typically <c>{api-app-id-uri}/.default</c> for
-    /// client-credentials flows). Must not be null or empty.
-    /// </param>
-    /// <param name="cancellationToken">Token to cancel the underlying credential call.</param>
-    /// <returns>A bearer access token suitable for the <c>Authorization</c> header.</returns>
     ValueTask<string> GetAccessTokenAsync(string scope, CancellationToken cancellationToken);
 }
 
-/// <summary>
-/// Typed HTTP client that calls the downstream API. Token-per-call is acquired via
-/// <see cref="IAppTokenProvider"/>; the underlying <see cref="HttpClient"/> is resolved
-/// via <see cref="IHttpClientFactory"/> so resilience/telemetry middleware apply.
-/// </summary>
 public sealed partial class DownstreamApiClient(
     HttpClient http,
     IAppTokenProvider tokenProvider,

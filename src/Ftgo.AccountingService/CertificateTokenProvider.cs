@@ -19,31 +19,17 @@ internal sealed class KeyVaultCertOptions
 
     public string? CertName { get; init; }
 
-    /// <summary>
-    /// Optional user-assigned managed identity client ID. Leave empty to use system-assigned MI.
-    /// </summary>
     public string? ManagedIdentityClientId { get; init; }
 
-    /// <summary>
-    /// Optional path to a local PFX file. When set, the certificate is loaded from disk and
-    /// Key Vault is bypassed entirely — useful for local development without a Key Vault.
-    /// In production this should be left null so the cert is pulled from Key Vault using
-    /// managed identity.
-    /// </summary>
+    /// <summary>Local-dev escape hatch: when set, the cert is loaded from disk and Key Vault is bypassed.</summary>
     public string? LocalPfxPath { get; init; }
 
-    /// <summary>
-    /// Optional passphrase for <see cref="LocalPfxPath"/>. Empty string is treated as no passphrase.
-    /// </summary>
     public string? LocalPfxPassword { get; init; }
 }
 
-/// <summary>
-/// AccountingService — app token via CERTIFICATE (cert pulled from Key Vault with its private key).
-/// Cert is loaded asynchronously in <see cref="StartAsync"/> so the DI container stays free of sync I/O,
-/// and the credential pulling the cert is restricted to <see cref="ManagedIdentityCredential"/>
-/// (no fallback chain) for predictable production behaviour.
-/// </summary>
+// Cert is loaded in StartAsync (not the constructor) so DI stays free of sync I/O. The Key Vault
+// credential is pinned to ManagedIdentityCredential — no DefaultAzureCredential fallback chain — for
+// predictable production behaviour.
 internal sealed partial class CertificateTokenProvider : IAppTokenProvider, IHostedService, IDisposable
 {
     private readonly IOptions<AzureAdOptions> _aad;

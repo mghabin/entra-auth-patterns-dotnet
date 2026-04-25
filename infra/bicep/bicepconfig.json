@@ -1,0 +1,6 @@
+{
+  "extensions": {
+    "graphV1": "br:mcr.microsoft.com/bicep/extensions/microsoftgraph/v1.0:0.2.0-preview"
+  },
+  "implicitExtensions": []
+}

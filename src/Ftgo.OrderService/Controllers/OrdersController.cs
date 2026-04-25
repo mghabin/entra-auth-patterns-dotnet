@@ -11,7 +11,7 @@ namespace Ftgo.OrderService.Controllers;
 [Authorize]
 public sealed class OrdersController : ControllerBase
 {
-    /// <summary>User-token endpoint: requires delegated scope.</summary>
+    /// <summary>User-token endpoint.</summary>
     [HttpGet("whoami")]
     [RequiredScope("orders.read")]
     public IActionResult WhoAmI() => Ok(new
@@ -24,10 +24,7 @@ public sealed class OrdersController : ControllerBase
         name = User.FindFirst("name")?.Value
     });
 
-    /// <summary>
-    /// App-only endpoint: requires the Orders.Process role and an allow-listed caller app
-    /// (ApiGateway + the four worker services — list comes from EntraAuth config).
-    /// </summary>
+    /// <summary>App-only endpoint: requires the <c>Orders.Process</c> role and an allow-listed caller app.</summary>
     [HttpGet("system")]
     [Authorize(Roles = "Orders.Process")]
     [RequireClientApp]

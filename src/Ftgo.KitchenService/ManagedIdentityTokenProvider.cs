@@ -9,9 +9,7 @@ internal sealed class ManagedIdentityOptions
     public string? UserAssignedClientId { get; init; }
 }
 
-/// <summary>
-/// KitchenService — app token via MANAGED IDENTITY (system- or user-assigned). Use inside Azure.
-/// </summary>
+/// <summary>App token via Managed Identity (system- or user-assigned). Use inside Azure.</summary>
 internal sealed class ManagedIdentityTokenProvider(IOptions<ManagedIdentityOptions> options)
     : IAppTokenProvider
 {

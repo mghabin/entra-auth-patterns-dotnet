@@ -11,11 +11,7 @@ using Microsoft.IdentityModel.Validators;
 
 namespace Ftgo.Auth;
 
-/// <summary>
-/// One-line bootstrap for Entra-protected APIs in this sample. In a real org this would
-/// live in a NuGet package (e.g. <c>EntraAuth.Auth</c>). Every service calls:
-/// <code>builder.Services.AddEntraAuth(builder.Configuration);</code>
-/// </summary>
+/// <summary>One-line bootstrap (<c>AddEntraAuth</c>) so every Entra-protected API in the sample wires the same way.</summary>
 public static class EntraAuthServiceCollectionExtensions
 {
     public static IServiceCollection AddEntraAuth(
@@ -55,11 +51,6 @@ public static class EntraAuthServiceCollectionExtensions
     }
 }
 
-/// <summary>
-/// Post-configures the JwtBearer options set up by Microsoft.Identity.Web to:
-///   1. Pin audience to the API's client ID (v2 default).
-///   2. Enforce a tenant allow-list for multi-tenant APIs.
-/// </summary>
 internal sealed class EntraAuthJwtPostConfigure(
     IOptions<EntraAuthOptions> options,
     IConfiguration configuration)
@@ -98,12 +89,10 @@ internal sealed class EntraAuthJwtPostConfigure(
 
             bearerOptions.TokenValidationParameters.IssuerValidator = (issuer, token, parameters) =>
             {
-                // 1. Delegate the cryptographic + structural issuer check to Microsoft.IdentityModel.Validators.
-                //    This enforces issuer is a known Microsoft signing authority AND that the issuer's
-                //    {tenantid} segment matches the token's tid claim.
+                // AadIssuerValidator enforces the issuer is a known Microsoft signing authority and that
+                // the issuer's {tenantid} segment matches the token's tid. We then enforce our allow-list.
                 var validatedIssuer = aadIssuerValidator.Validate(issuer, token, parameters);
 
-                // 2. Then enforce our tenant allow-list with exact-match equality.
                 if (token is not JsonWebToken jwt)
                 {
                     throw new SecurityTokenInvalidIssuerException(

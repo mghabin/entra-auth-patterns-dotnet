@@ -32,7 +32,7 @@ business-capability name and demonstrates exactly one Entra auth shape.
 ```bash
 git clone https://github.com/mghabin/entra-auth-patterns-dotnet.git
 cd entra-auth-patterns-dotnet
-./scripts/setup.sh                 # 7 app regs + cert + federated cred
+./scripts/deploy.sh                # 7 app regs + permissions + cert + FIC (Bicep IaC)
 dotnet build EntraAuthPatterns.slnx
 dotnet test  EntraAuthPatterns.slnx
 ```

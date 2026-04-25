@@ -1,18 +1,8 @@
 name: workload-identity-demo
 
-# Demonstrates GitHub Actions OIDC → Microsoft Entra ID via a federated
-# credential. Run manually after you've created the federated credential
-# on the ftgo-deliveryservice app registration with subject:
-#
-#   repo:mghabin/entra-auth-patterns-dotnet:ref:refs/heads/main
-#
-# and configured the following repo secrets:
-#
-#   AZURE_TENANT_ID            — the Entra tenant containing the app
-#   AZURE_CLIENT_ID            — ftgo-deliveryservice app (client) ID
-#   FTGO_RESTAURANTS_SCOPE     — e.g. api://<restaurantservice-id>/.default
-#
-# No client secret is stored anywhere.
+# Demonstrates GitHub Actions OIDC → Microsoft Entra ID via federated credential. No secret stored.
+# The federated credential and repo secrets (AZURE_TENANT_ID, AZURE_CLIENT_ID, FTGO_RESTAURANTS_SCOPE)
+# are provisioned by scripts/deploy.sh.
 
 on:
   workflow_dispatch:

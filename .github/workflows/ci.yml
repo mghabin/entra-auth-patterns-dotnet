@@ -53,3 +53,23 @@ jobs:
 
       - name: Format check
         run: dotnet format EntraAuthPatterns.slnx --verify-no-changes --no-restore --severity warn
+
+  bicep-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: Bicep build (lints templates)
+        run: |
+          az bicep build --file infra/bicep/main.bicep --outdir /tmp/bicep-out
+          echo "main.bicep + modules built clean"
+
+      - name: Bicep build-params
+        env:
+          AZURE_TENANT_ID: 00000000-0000-0000-0000-000000000000
+        run: |
+          az bicep build-params --file infra/bicep/main.bicepparam --outfile /tmp/bicep-out/main.parameters.json
+          echo "main.bicepparam compiled clean"
