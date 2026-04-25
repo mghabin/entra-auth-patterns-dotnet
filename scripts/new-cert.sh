@@ -2,13 +2,13 @@
 # scripts/new-cert.sh — generate a self-signed cert for an app registration and upload the
 # public key. Idempotent. The .pfx stays local; do NOT commit it.
 #
-# Usage:  APP_NAME=ftgo-apigateway ./scripts/new-cert.sh
+# Usage:  APP_NAME=ftgo-local-apigateway ./scripts/new-cert.sh
 #
 # Prereqs: openssl, az CLI logged in.
 
 set -euo pipefail
 
-APP_NAME="${APP_NAME:-ftgo-accountingservice}"
+APP_NAME="${APP_NAME:-ftgo-local-accountingservice}"
 OUT_DIR="${OUT_DIR:-./.certs}"
 SUBJECT="${SUBJECT:-/CN=${APP_NAME}}"
 DAYS="${DAYS:-365}"
