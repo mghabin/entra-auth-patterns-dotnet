@@ -34,7 +34,7 @@ public static class ProblemDetailsExtensions
 internal sealed partial class EntraAuthExceptionHandler(ILogger<EntraAuthExceptionHandler> logger)
     : IExceptionHandler
 {
-    public async ValueTask<bool> TryHandleAsync(
+    public ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
         CancellationToken cancellationToken)
@@ -43,7 +43,7 @@ internal sealed partial class EntraAuthExceptionHandler(ILogger<EntraAuthExcepti
 
         httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
         var pds = httpContext.RequestServices.GetRequiredService<IProblemDetailsService>();
-        return await pds.TryWriteAsync(new ProblemDetailsContext
+        return pds.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = httpContext,
             ProblemDetails =
