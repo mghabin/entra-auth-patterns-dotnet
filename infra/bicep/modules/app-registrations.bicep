@@ -19,9 +19,13 @@ param prefix string
 @description('OIDC redirect URI registered on the BFF (api gateway) for local-dev sign-in.')
 param apiGatewayRedirectUri string
 
-var ordersReadScopeId     = guid(tenantId, '${prefix}-orderservice',      'orders.read')
-var ordersProcessRoleId   = guid(tenantId, '${prefix}-orderservice',      'Orders.Process')
-var restaurantsReadRoleId = guid(tenantId, '${prefix}-restaurantservice', 'Restaurants.Read.All')
+@description('SPA redirect URI registered on the BFF for Scalar PKCE callback.')
+param scalarRedirectUri string
+
+var ordersReadScopeId        = guid(tenantId, '${prefix}-orderservice',      'orders.read')
+var ordersProcessRoleId      = guid(tenantId, '${prefix}-orderservice',      'Orders.Process')
+var restaurantsReadRoleId    = guid(tenantId, '${prefix}-restaurantservice', 'Restaurants.Read.All')
+var gatewayOrdersReadScopeId = guid(tenantId, '${prefix}-apigateway',        'orders.read')
 
 var workerApps = [
   'kitchenService'
@@ -41,6 +45,24 @@ resource apiGateway 'Microsoft.Graph/applications@v1.0' = {
       enableAccessTokenIssuance: false
     }
   }
+  spa: {
+    redirectUris: [ scalarRedirectUri ]
+  }
+  api: {
+    requestedAccessTokenVersion: 2
+    oauth2PermissionScopes: [
+      {
+        id:                      gatewayOrdersReadScopeId
+        adminConsentDisplayName: 'Read orders via the BFF'
+        adminConsentDescription: 'Allows the user to invoke the BFF\'s checkout endpoints which fan-out to OrderService.'
+        userConsentDisplayName:  'Use checkout'
+        userConsentDescription:  'Allows the app to invoke checkout on your behalf.'
+        value:                   'orders.read'
+        type:                    'User'
+        isEnabled:               true
+      }
+    ]
+  }
 }
 
 resource apiGatewaySp 'Microsoft.Graph/servicePrincipals@v1.0' = {
@@ -51,7 +73,6 @@ resource orderService 'Microsoft.Graph/applications@v1.0' = {
   uniqueName:     '${prefix}-orderservice'
   displayName:    '${prefix}-orderservice'
   signInAudience: 'AzureADMyOrg'
-  identifierUris: [ 'api://${prefix}-orderservice' ]
   api: {
     requestedAccessTokenVersion: 2
     oauth2PermissionScopes: [
@@ -87,7 +108,6 @@ resource restaurantService 'Microsoft.Graph/applications@v1.0' = {
   uniqueName:     '${prefix}-restaurantservice'
   displayName:    '${prefix}-restaurantservice'
   signInAudience: 'AzureADMultipleOrgs'
-  identifierUris: [ 'api://${prefix}-restaurantservice' ]
   api: {
     requestedAccessTokenVersion: 2
   }
@@ -130,7 +150,8 @@ output apps object = {
 
 @description('Deterministic role/scope IDs consumed by permission-grants.')
 output roleIds object = {
-  ordersProcess:    ordersProcessRoleId
-  restaurantsRead:  restaurantsReadRoleId
-  ordersReadScope:  ordersReadScopeId
+  ordersProcess:        ordersProcessRoleId
+  restaurantsRead:      restaurantsReadRoleId
+  ordersReadScope:      ordersReadScopeId
+  gatewayOrdersReadScope: gatewayOrdersReadScopeId
 }

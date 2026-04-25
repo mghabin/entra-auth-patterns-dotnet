@@ -583,6 +583,11 @@
           "System.IdentityModel.Tokens.Jwt": "8.17.0"
         }
       },
+      "Microsoft.OpenApi": {
+        "type": "Transitive",
+        "resolved": "2.0.0",
+        "contentHash": "GGYLfzV/G/ct80OZ45JxnWP7NvMX1BCugn/lX7TH5o0lcVaviavsLMTxmFV2AybXWjbi3h6FF1vgZiTK6PXndw=="
+      },
       "Microsoft.Testing.Extensions.Telemetry": {
         "type": "Transitive",
         "resolved": "1.9.1",
@@ -809,10 +814,12 @@
         "type": "Project",
         "dependencies": {
           "Ftgo.Auth.Client": "[1.0.0, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.7, )",
           "Microsoft.Identity.Web": "[4.8.0, )",
           "Microsoft.Identity.Web.DownstreamApi": "[4.8.0, )",
           "Microsoft.IdentityModel.Validators": "[8.17.0, )",
-          "OpenTelemetry.Instrumentation.AspNetCore": "[1.15.2, )"
+          "OpenTelemetry.Instrumentation.AspNetCore": "[1.15.2, )",
+          "Scalar.AspNetCore": "[2.14.4, )"
         }
       },
       "ftgo.auth.client": {
@@ -878,6 +885,15 @@
           "Microsoft.Extensions.Logging.Abstractions": "10.0.7",
           "Microsoft.Extensions.Options": "10.0.7",
           "System.Security.Cryptography.Xml": "10.0.7"
+        }
+      },
+      "Microsoft.AspNetCore.OpenApi": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.7, )",
+        "resolved": "10.0.7",
+        "contentHash": "vKiAcGXG0BwNVw3bOjjWRLnp9tR18dR7MiwpvC94h0yFS+zfnzGHzS/JmmgwUdRixrGxrlIMRAWrVc+2DfAGlg==",
+        "dependencies": {
+          "Microsoft.OpenApi": "2.0.0"
         }
       },
       "Microsoft.Extensions.Configuration.Json": {
@@ -1091,6 +1107,12 @@
         "dependencies": {
           "OpenTelemetry.Api": "[1.15.3, 2.0.0)"
         }
+      },
+      "Scalar.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[2.14.4, )",
+        "resolved": "2.14.4",
+        "contentHash": "PyuqLRi7JXyTJm/rh+IWCA4Fct1SlZuWrdYiui5hiaBuSY88+roc4eWKfYaE6zrupBIwnEP8pJLe4ifvU7HtZA=="
       },
       "System.Security.Cryptography.Xml": {
         "type": "CentralTransitive",

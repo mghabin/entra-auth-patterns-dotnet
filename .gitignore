@@ -32,3 +32,9 @@ secrets.json
 appsettings.*.local.json
 .env
 .env.local
+
+# Local dev runtime
+.logs/
+
+# Compiled Bicep ARM output
+infra/bicep/*.json
