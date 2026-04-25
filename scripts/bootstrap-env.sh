@@ -53,11 +53,29 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GH_OWNER="${GH_OWNER:-$(gh repo view --json owner --jq .owner.login)}"
 GH_REPO="${GH_REPO:-$(gh repo view --json name --jq .name)}"
 LOCATION="${LOCATION:-eastus}"
-TENANT_ID="$(az account show --query tenantId -o tsv)"
-SUB_ID="$(az account show --query id -o tsv)"
+ACCOUNT_JSON="$(az account show -o json)"
+TENANT_ID=$(jq -r .tenantId <<<"$ACCOUNT_JSON")
+SUB_ID=$(jq    -r .id       <<<"$ACCOUNT_JSON")
+SUB_NAME=$(jq  -r .name     <<<"$ACCOUNT_JSON")
+
+# Detect "tenant-only" logins (no subscription selected). az returns a placeholder
+# whose id == tenantId, which would later fail with a confusing SubscriptionNotFound.
+if [[ "$SUB_ID" == "$TENANT_ID" ]] || [[ "$SUB_NAME" == "N/A(tenant level account)" ]]; then
+  cat >&2 <<EOF
+ERROR: az is logged in to tenant ${TENANT_ID} but no Azure subscription is selected.
+       Detected: name='${SUB_NAME}', id='${SUB_ID}' (matches tenantId — placeholder, not a real subscription).
+
+       You need a real Azure subscription to deploy resources. Options:
+         * Create a free one:  https://azure.microsoft.com/free
+         * Switch tenant:      az login --tenant <other-tenant-id>
+         * Pick a sub:         az account list -o table
+                               az account set --subscription <sub-id-or-name>
+EOF
+  exit 1
+fi
 
 echo "==> repo         : ${GH_OWNER}/${GH_REPO}"
-echo "==> subscription : ${SUB_ID}"
+echo "==> subscription : ${SUB_NAME} (${SUB_ID})"
 echo "==> tenant       : ${TENANT_ID}"
 echo "==> env          : ${ENV}"
 echo
