@@ -33,20 +33,21 @@ business-capability name and demonstrates exactly one Entra auth shape.
 ```bash
 git clone https://github.com/mghabin/entra-auth-patterns-dotnet.git
 cd entra-auth-patterns-dotnet
-./scripts/deploy.sh                # 7 app regs + permissions + cert + FIC (Bicep IaC)
 dotnet build EntraAuthPatterns.slnx
 dotnet test  EntraAuthPatterns.slnx
 ```
 
-Full free-tier walkthrough → [`docs/run-locally.md`](docs/run-locally.md).
+To run against real Entra patterns end-to-end, deploy to a free-tier cloud env (next section). For local development, use `az login` + `DefaultAzureCredential` to call the cloud APIs from your laptop — no per-developer app regs needed.
 
 ## Deploy to the cloud
 
 Free-tier Azure Container Apps deployment with **dev → ppe → prod** promotion via GitHub Actions OIDC, image promotion by SHA, App Insights observability, zero stored client secrets:
 
 ```bash
-./scripts/bootstrap-env.sh ENV=dev   # one-time per env
-git push origin main                 # auto-deploys to dev → ppe → prod (with reviewer gate)
+./scripts/bootstrap-env.sh ENV=dev    # one-time: GH OIDC UAMI + RG + RPs
+git push origin main                  # auto-deploys to dev
+./scripts/provision-apps.sh ENV=dev   # one-time: 7 app regs + FICs + env-var wiring
+gh workflow run cd.yml -f environment=ppe   # manual promotion to ppe (later, prod)
 ```
 
 Costs **$0/mo at idle** (scale-to-zero) and ~$3-5/mo with prod always-on. Full guide → [`docs/deploy-cloud.md`](docs/deploy-cloud.md), promotion model → [`docs/environments.md`](docs/environments.md).

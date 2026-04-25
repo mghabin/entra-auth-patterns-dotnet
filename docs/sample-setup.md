@@ -23,15 +23,15 @@ auth shapes are taught against recognisable, business-meaningful names.
 
 ## App registrations
 
-Create seven app registrations. Provisioning is declarative via the **Microsoft.Graph Bicep extension** at `infra/bicep/main.bicep`, run through `scripts/deploy.sh` — apps, service principals, scopes/roles and admin-consented permissions are created idempotently:
+Create seven app registrations. Provisioning is declarative via the **Microsoft.Graph Bicep extension** at `infra/bicep/main.bicep`, run through `scripts/provision-apps.sh ENV=dev` — apps, service principals, scopes/roles and admin-consented permissions are created idempotently:
 
-1. **ftgo-local-apigateway** (single-tenant) — consumes the `orders.read` delegated scope on behalf of users.
-2. **ftgo-local-orderservice** (single-tenant) — exposes scope `orders.read` and app role `Orders.Process`.
-3. **ftgo-local-restaurantservice** (multi-tenant, `signInAudience: AzureADMultipleOrgs`) — exposes app role `Restaurants.Read.All`.
-4. **ftgo-local-kitchenservice** (single-tenant, optional) — only needed if running outside Azure; in Azure the identity is a **Managed Identity**.
-5. **ftgo-local-accountingservice** (single-tenant) — has a **certificate** credential whose private key lives in Key Vault.
-6. **ftgo-local-deliveryservice** (single-tenant) — has a **federated identity credential** (GitHub Actions / AKS / etc.).
-7. **ftgo-local-notificationservice** (single-tenant) — has a **client secret** (anti-pattern; rotate ≤ 6 months).
+1. **ftgo-dev-apigateway** (single-tenant) — consumes the `orders.read` delegated scope on behalf of users.
+2. **ftgo-dev-orderservice** (single-tenant) — exposes scope `orders.read` and app role `Orders.Process`.
+3. **ftgo-dev-restaurantservice** (multi-tenant, `signInAudience: AzureADMultipleOrgs`) — exposes app role `Restaurants.Read.All`.
+4. **ftgo-dev-kitchenservice** (single-tenant, optional) — only needed if running outside Azure; in Azure the identity is a **Managed Identity**.
+5. **ftgo-dev-accountingservice** (single-tenant) — has a **certificate** credential whose private key lives in Key Vault.
+6. **ftgo-dev-deliveryservice** (single-tenant) — has a **federated identity credential** (GitHub Actions / AKS / etc.).
+7. **ftgo-dev-notificationservice** (single-tenant) — has a **client secret** (anti-pattern; rotate ≤ 6 months).
 
 For each API app reg, set manifest `requestedAccessTokenVersion = 2` so
 `aud` is the API's client ID GUID.
@@ -40,13 +40,13 @@ For each API app reg, set manifest `requestedAccessTokenVersion = 2` so
 
 | Caller                                | Callee                  | Permission                                                          |
 |---------------------------------------|-------------------------|---------------------------------------------------------------------|
-| ftgo-local-apigateway (delegated)           | ftgo-local-orderservice       | scope `orders.read` (admin-consented)                               |
-| ftgo-local-apigateway (app)                 | ftgo-local-orderservice       | role `Orders.Process`                                               |
-| ftgo-local-apigateway (app)                 | ftgo-local-restaurantservice  | role `Restaurants.Read.All` (consented in each provisioned tenant)  |
-| ftgo-local-kitchenservice MI                | ftgo-local-orderservice       | role `Orders.Process` (assign with `New-MgServicePrincipalAppRoleAssignment`) |
-| ftgo-local-accountingservice                | ftgo-local-orderservice       | role `Orders.Process`                                               |
-| ftgo-local-deliveryservice                  | ftgo-local-restaurantservice  | role `Restaurants.Read.All`                                         |
-| ftgo-local-notificationservice              | ftgo-local-orderservice       | role `Orders.Process`                                               |
+| ftgo-dev-apigateway (delegated)           | ftgo-dev-orderservice       | scope `orders.read` (admin-consented)                               |
+| ftgo-dev-apigateway (app)                 | ftgo-dev-orderservice       | role `Orders.Process`                                               |
+| ftgo-dev-apigateway (app)                 | ftgo-dev-restaurantservice  | role `Restaurants.Read.All` (consented in each provisioned tenant)  |
+| ftgo-dev-kitchenservice MI                | ftgo-dev-orderservice       | role `Orders.Process` (assign with `New-MgServicePrincipalAppRoleAssignment`) |
+| ftgo-dev-accountingservice                | ftgo-dev-orderservice       | role `Orders.Process`                                               |
+| ftgo-dev-deliveryservice                  | ftgo-dev-restaurantservice  | role `Restaurants.Read.All`                                         |
+| ftgo-dev-notificationservice              | ftgo-dev-orderservice       | role `Orders.Process`                                               |
 
 Set `appRoleAssignmentRequired = true` on the resource APIs so only
 allow-listed callers receive `roles`.

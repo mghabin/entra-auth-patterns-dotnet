@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # scripts/provision-apps.sh — per-env Entra app provisioning for cloud envs (dev|ppe|prod).
 #
-# Sibling to scripts/deploy.sh (which handles the local-dev path). For cloud envs we deploy
+# Per-env Entra app provisioning. For each cloud env (dev|ppe|prod) this script:
+#   1. Deploys infra/bicep/main.bicep at tenant scope to (re-)create the per-env app
+#      registrations (idempotent — Microsoft.Graph extension matches by uniqueName).
+#   2. Creates a federated identity credential on each non-BFF app reg trusting the
+#      Container App's system MI as a SignedAssertionFromManagedIdentity issuer.
+#   3. Pushes per-env Entra config into each Container App's environment variables
+#      (TenantId, ClientId, downstream URLs/scopes, allow-lists).
 # infra/bicep/main.bicep at tenant scope to create the per-env app registrations, then create
 # federated identity credentials linking each non-BFF service's app reg to the system MI of its
 # Container App. Cloud services use SignedAssertionFromManagedIdentity (no client secrets, no certs).
@@ -237,20 +243,43 @@ KITC_APP_NAME=$(jq -r '.kitchenservice.name' <<<"$SERVICES")
   "Downstream__BaseUrl=https://${ORDER_FQDN}/" \
   "Downstream__Scope=api://${ORDER_APPID}/.default"
 
-# 4e. OrderService: AllowedClientApps whitelist (BFF + 4 workers).
+# Microsoft public client appIds — pre-registered, well-known, used as a "developer's local
+# identity" via DefaultAzureCredential / AzureCliCredential. Whitelisted ONLY in the dev env
+# so a laptop can hit dev cloud APIs with `az account get-access-token`. ppe and prod must
+# only accept tokens from the real workload identities (BFF + workers).
+#   Azure CLI:  04b07795-8ddb-461a-bbee-02f9e1bf7b46
+#   Visual Studio Code: aebc6443-996d-45c2-90f0-388ff96faa56
+DEV_TOOL_CLIENTS=()
+if [[ "$ENV" == "dev" ]]; then
+  DEV_TOOL_CLIENTS=(
+    "EntraAuth__AllowedClientApps__5=04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+    "EntraAuth__AllowedClientApps__6=aebc6443-996d-45c2-90f0-388ff96faa56"
+  )
+fi
+
+# 4e. OrderService: AllowedClientApps whitelist (BFF + 4 workers, plus dev tools when env=dev).
 ORDER_APP_NAME=$(jq -r '.orderservice.name' <<<"$SERVICES")
 set_env "$ORDER_APP_NAME" \
   "EntraAuth__AllowedClientApps__0=$BFF_APPID" \
   "EntraAuth__AllowedClientApps__1=$ACCT_APPID" \
   "EntraAuth__AllowedClientApps__2=$DELI_APPID" \
   "EntraAuth__AllowedClientApps__3=$NOTI_APPID" \
-  "EntraAuth__AllowedClientApps__4=$KITC_APPID"
+  "EntraAuth__AllowedClientApps__4=$KITC_APPID" \
+  "${DEV_TOOL_CLIENTS[@]}"
 
-# 4f. RestaurantService (multi-tenant): pin allowed tenant + BFF as allowed client.
+# 4f. RestaurantService (multi-tenant): pin allowed tenant + BFF (plus dev tools when env=dev).
+REST_DEV_CLIENTS=()
+if [[ "$ENV" == "dev" ]]; then
+  REST_DEV_CLIENTS=(
+    "EntraAuth__AllowedClientApps__1=04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+    "EntraAuth__AllowedClientApps__2=aebc6443-996d-45c2-90f0-388ff96faa56"
+  )
+fi
 REST_APP_NAME=$(jq -r '.restaurantservice.name' <<<"$SERVICES")
 set_env "$REST_APP_NAME" \
   "EntraAuth__AllowedTenantIds__0=$TENANT_ID" \
-  "EntraAuth__AllowedClientApps__0=$BFF_APPID"
+  "EntraAuth__AllowedClientApps__0=$BFF_APPID" \
+  "${REST_DEV_CLIENTS[@]}"
 
 cat <<EOF
 
