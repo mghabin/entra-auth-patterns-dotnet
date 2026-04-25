@@ -50,16 +50,17 @@ echo "==> env    : $ENV (rg=$RG_NAME)"
 
 # 1. Locate the most-recent successful azure.bicep deployment for this env.
 echo "==> Reading latest azure.bicep deployment outputs"
-LATEST_DEPLOY=$(az deployment sub list \
+LATEST_DEPLOY=$(az deployment group list \
+  --resource-group "$RG_NAME" \
   --query "[?starts_with(name, 'ftgo-${ENV}-') && properties.provisioningState=='Succeeded'] | sort_by(@, &properties.timestamp) | [-1].name" \
   -o tsv --only-show-errors)
 if [[ -z "$LATEST_DEPLOY" ]]; then
-  echo "ERROR: no successful sub-scope deployment 'ftgo-${ENV}-*' found. Deploy azure.bicep first." >&2
+  echo "ERROR: no successful RG-scope deployment 'ftgo-${ENV}-*' found in $RG_NAME. Deploy azure.bicep first." >&2
   exit 1
 fi
 echo "    deployment = $LATEST_DEPLOY"
 
-OUTPUTS=$(az deployment sub show --name "$LATEST_DEPLOY" --query properties.outputs -o json --only-show-errors)
+OUTPUTS=$(az deployment group show --resource-group "$RG_NAME" --name "$LATEST_DEPLOY" --query properties.outputs -o json --only-show-errors)
 BFF_FQDN=$(jq -r '.apiGatewayFqdn.value' <<<"$OUTPUTS")
 SERVICES=$(jq -r '.services.value' <<<"$OUTPUTS")
 if [[ -z "$BFF_FQDN" || "$BFF_FQDN" == "null" ]]; then
@@ -73,6 +74,10 @@ echo "==> Deploying infra/bicep/main.bicep (env=$ENV)"
 DEPLOY_NAME="ftgo-entra-${ENV}-$(date -u +%Y%m%d%H%M%S)"
 AGW_REDIRECT="https://${BFF_FQDN}/signin-oidc"
 SCALAR_REDIRECT="https://${BFF_FQDN}/scalar/v1"
+
+# main.${ENV}.bicepparam reads AZURE_TENANT_ID via readEnvironmentVariable; export it for the
+# bicep build-params step that az runs internally.
+export AZURE_TENANT_ID="$TENANT_ID"
 
 az deployment tenant create \
   --name "$DEPLOY_NAME" \
@@ -116,12 +121,11 @@ for short in "${!SVC_TO_BICEP_KEY[@]}"; do
     app_obj_id=$(az ad app show --id "$app_id" --query id -o tsv --only-show-errors 2>/dev/null || echo "")
   fi
   fqdn=$(jq -r --arg k "$short" '.[$k].fqdn // empty' <<<"$SERVICES")
-  mi_client_id=$(az containerapp show --name "ftgo-${ENV}-${short}" --resource-group "$RG_NAME" \
-    --query 'identity.principalId' -o tsv --only-show-errors 2>/dev/null || true)
+  mi_principal_id=$(jq -r --arg k "$short" '.[$k].principalId // empty' <<<"$SERVICES")
   # The MI clientId is what we need as the FIC subject. principalId is the SP objectId — we need
-  # to look up the matching clientId.
-  mi_principal_id="$mi_client_id"
-  if [[ -n "$mi_principal_id" && "$mi_principal_id" != "None" ]]; then
+  # to look up the matching clientId via Graph.
+  mi_client_id=""
+  if [[ -n "$mi_principal_id" && "$mi_principal_id" != "null" ]]; then
     mi_client_id=$(az ad sp show --id "$mi_principal_id" --query appId -o tsv --only-show-errors 2>/dev/null || echo "")
   fi
 
@@ -159,5 +163,99 @@ Per-env Entra provisioning complete for ${ENV}.
   - tenant deployment: $DEPLOY_NAME
   - BFF redirect URI:  $AGW_REDIRECT
   - Scalar redirect:   $SCALAR_REDIRECT
+============================================================
+EOF
+
+# 4. Wire Entra config into each Container App's environment variables.
+#
+# appsettings.json ships with placeholder GUIDs. .NET config binds env vars with '__'
+# as the section separator and overrides JSON, so we push the per-env values here.
+#
+# Conventions:
+#   AzureAd__TenantId / AzureAd__ClientId        — every service needs these
+#   AzureAd__ClientCredentials__0__SourceType    — services that acquire downstream tokens
+#   DownstreamApis__<name>__BaseUrl/Scopes/...   — BFF pattern (Microsoft.Identity.Web)
+#   Downstream__BaseUrl/Scope                    — worker pattern (single-target client)
+#   EntraAuth__AllowedClientApps__N              — resource-server whitelist (OrderService)
+#   EntraAuth__AllowedTenantIds__N               — multi-tenant resource (RestaurantService)
+echo
+echo "==> Wiring Entra config into Container App env vars"
+
+# Resolve well-known FQDNs and appIds for downstream wiring.
+ORDER_FQDN=$(jq -r '.orderservice.fqdn' <<<"$SERVICES")
+REST_FQDN=$(jq -r '.restaurantservice.fqdn' <<<"$SERVICES")
+ORDER_APPID=$(jq -r '.orderService.appId' <<<"$APPS")
+REST_APPID=$(jq -r '.restaurantService.appId' <<<"$APPS")
+BFF_APPID=$(jq -r '.apiGateway.appId' <<<"$APPS")
+ACCT_APPID=$(jq -r '.accountingService.appId' <<<"$APPS")
+DELI_APPID=$(jq -r '.deliveryService.appId' <<<"$APPS")
+NOTI_APPID=$(jq -r '.notificationService.appId' <<<"$APPS")
+KITC_APPID=$(jq -r '.kitchenService.appId' <<<"$APPS")
+
+set_env() {
+  local app_name="$1"; shift
+  echo "    $app_name"
+  for kv in "$@"; do echo "      $kv"; done
+  az containerapp update --name "$app_name" --resource-group "$RG_NAME" \
+    --set-env-vars "$@" --only-show-errors --output none
+}
+
+# 4a. Per-service: AzureAd__TenantId + AzureAd__ClientId on every app.
+for short in "${!SVC_TO_BICEP_KEY[@]}"; do
+  bicep_key="${SVC_TO_BICEP_KEY[$short]}"
+  app_id=$(jq -r --arg k "$bicep_key" '.[$k].appId' <<<"$APPS")
+  app_name=$(jq -r --arg k "$short" '.[$k].name // empty' <<<"$SERVICES")
+  [[ -z "$app_name" ]] && continue
+  set_env "$app_name" \
+    "AzureAd__TenantId=$TENANT_ID" \
+    "AzureAd__ClientId=$app_id"
+done
+
+# 4b. BFF (apigateway): DownstreamApis routing + URLs.
+BFF_APP_NAME=$(jq -r '.apigateway.name' <<<"$SERVICES")
+set_env "$BFF_APP_NAME" \
+  "AzureAd__ClientCredentials__0__SourceType=SignedAssertionFromManagedIdentity" \
+  "DownstreamApis__Orders__BaseUrl=https://${ORDER_FQDN}/" \
+  "DownstreamApis__Orders__Scopes__0=api://${ORDER_APPID}/orders.read" \
+  "DownstreamApis__Orders__AppPermissionScopes__0=api://${ORDER_APPID}/.default" \
+  "DownstreamApis__Restaurants__BaseUrl=https://${REST_FQDN}/" \
+  "DownstreamApis__Restaurants__AppPermissionScopes__0=api://${REST_APPID}/.default"
+
+# 4c. Worker services (call OrderService daemon-style via SignedAssertionFromManagedIdentity).
+for short in accountingservice deliveryservice notificationservice; do
+  app_name=$(jq -r --arg k "$short" '.[$k].name // empty' <<<"$SERVICES")
+  [[ -z "$app_name" ]] && continue
+  set_env "$app_name" \
+    "AzureAd__ClientCredentials__0__SourceType=SignedAssertionFromManagedIdentity" \
+    "Downstream__BaseUrl=https://${ORDER_FQDN}/" \
+    "Downstream__Scope=api://${ORDER_APPID}/.default"
+done
+
+# 4d. KitchenService uses the MI directly (no app reg client) — point it at OrderService.
+KITC_APP_NAME=$(jq -r '.kitchenservice.name' <<<"$SERVICES")
+[[ -n "$KITC_APP_NAME" ]] && set_env "$KITC_APP_NAME" \
+  "Downstream__BaseUrl=https://${ORDER_FQDN}/" \
+  "Downstream__Scope=api://${ORDER_APPID}/.default"
+
+# 4e. OrderService: AllowedClientApps whitelist (BFF + 4 workers).
+ORDER_APP_NAME=$(jq -r '.orderservice.name' <<<"$SERVICES")
+set_env "$ORDER_APP_NAME" \
+  "EntraAuth__AllowedClientApps__0=$BFF_APPID" \
+  "EntraAuth__AllowedClientApps__1=$ACCT_APPID" \
+  "EntraAuth__AllowedClientApps__2=$DELI_APPID" \
+  "EntraAuth__AllowedClientApps__3=$NOTI_APPID" \
+  "EntraAuth__AllowedClientApps__4=$KITC_APPID"
+
+# 4f. RestaurantService (multi-tenant): pin allowed tenant + BFF as allowed client.
+REST_APP_NAME=$(jq -r '.restaurantservice.name' <<<"$SERVICES")
+set_env "$REST_APP_NAME" \
+  "EntraAuth__AllowedTenantIds__0=$TENANT_ID" \
+  "EntraAuth__AllowedClientApps__0=$BFF_APPID"
+
+cat <<EOF
+
+============================================================
+Container App env vars wired for ${ENV}.
+Browser flow: https://${BFF_FQDN}/signin-oidc
 ============================================================
 EOF
