@@ -1,6 +1,7 @@
 # entra-auth-patterns-dotnet
 
 [![CI](https://github.com/mghabin/entra-auth-patterns-dotnet/actions/workflows/ci.yml/badge.svg)](https://github.com/mghabin/entra-auth-patterns-dotnet/actions/workflows/ci.yml)
+[![CD](https://github.com/mghabin/entra-auth-patterns-dotnet/actions/workflows/cd.yml/badge.svg)](https://github.com/mghabin/entra-auth-patterns-dotnet/actions/workflows/cd.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com)
 
@@ -38,6 +39,17 @@ dotnet test  EntraAuthPatterns.slnx
 ```
 
 Full free-tier walkthrough → [`docs/run-locally.md`](docs/run-locally.md).
+
+## Deploy to the cloud
+
+Free-tier Azure Container Apps deployment with **dev → ppe → prod** promotion via GitHub Actions OIDC, image promotion by SHA, App Insights observability, zero stored client secrets:
+
+```bash
+./scripts/bootstrap-env.sh ENV=dev   # one-time per env
+git push origin main                 # auto-deploys to dev → ppe → prod (with reviewer gate)
+```
+
+Costs **$0/mo at idle** (scale-to-zero) and ~$3-5/mo with prod always-on. Full guide → [`docs/deploy-cloud.md`](docs/deploy-cloud.md), promotion model → [`docs/environments.md`](docs/environments.md).
 
 ## Docs
 
