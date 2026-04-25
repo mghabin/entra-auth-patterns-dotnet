@@ -46,7 +46,7 @@ COPY src/Ftgo.NotificationService/packages.lock.json        src/Ftgo.Notificatio
 COPY src/Ftgo.Auth/packages.lock.json                       src/Ftgo.Auth/
 COPY src/Ftgo.Auth.Client/packages.lock.json                src/Ftgo.Auth.Client/
 
-RUN --mount=type=cache,target=/root/.nuget/packages \
+RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
     dotnet restore -a "${TARGETARCH:-amd64}" src/${PROJECT}/${PROJECT}.csproj
 # NOTE: --locked-mode intentionally NOT used here. CI (`ci.yml`) restores the
 # whole solution with --locked-mode on every PR/push, so lock-file integrity
@@ -62,7 +62,12 @@ ARG TARGETARCH
 ARG BUILD_GIT_SHA=local
 ARG BUILD_VERSION=0.0.0-local
 COPY src/ src/
-RUN --mount=type=cache,target=/root/.nuget/packages \
+# Explicit id=nuget on the cache mount ensures BuildKit shares the cache contents
+# with the restore stage above (without an explicit id, BuildKit may scope the
+# mount per-stage, and `dotnet publish --no-restore` then can't find analyzer
+# packages like AsyncFixer → NETSDK1064). Pattern from dotnet/dotnet-docker
+# issue #3353.
+RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
     dotnet publish src/${PROJECT}/${PROJECT}.csproj \
         -a "${TARGETARCH:-amd64}" \
         --no-restore \
