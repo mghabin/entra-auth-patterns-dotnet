@@ -102,7 +102,7 @@ public sealed class AddEntraAuthWiringTests
     }
 
     [Fact]
-    public async Task AddEntraAuth_ValidateOnStart_FailsHostStart_WhenMultiTenantHasEmptyAllowList()
+    public Task AddEntraAuth_ValidateOnStart_FailsHostStart_WhenMultiTenantHasEmptyAllowList()
     {
         var dict = new Dictionary<string, string?>
         {
@@ -121,7 +121,7 @@ public sealed class AddEntraAuthWiringTests
                 services.AddEntraAuth(ctx.Configuration);
             });
 
-        await Should.ThrowAsync<OptionsValidationException>(async () =>
+        return Should.ThrowAsync<OptionsValidationException>(async () =>
         {
             using var host = hostBuilder.Build();
             await host.StartAsync(TestContext.Current.CancellationToken);
