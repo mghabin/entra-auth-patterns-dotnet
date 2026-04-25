@@ -143,8 +143,8 @@ jobs:
             echo "## dev — Bicep what-if preview"
             echo ""
             echo '```'
-            az deployment sub what-if \
-              --location eastus \
+            az deployment group what-if \
+              --resource-group rg-ftgo-dev-eastus \
               --template-file infra/bicep/azure.bicep \
               --parameters infra/bicep/azure.dev.bicepparam \
               --parameters imageTag="${IMAGE_TAG}" \
@@ -160,15 +160,15 @@ jobs:
         run: |
           set -euo pipefail
           NAME="ftgo-dev-$(date -u +%Y%m%d%H%M%S)"
-          az deployment sub create \
-            --location eastus \
+          az deployment group create \
+            --resource-group rg-ftgo-dev-eastus \
             --template-file infra/bicep/azure.bicep \
             --parameters infra/bicep/azure.dev.bicepparam \
             --parameters imageTag="${IMAGE_TAG}" \
             --name "$NAME" \
             --only-show-errors \
             --output none
-          OUTPUTS=$(az deployment sub show --name "$NAME" --query properties.outputs -o json)
+          OUTPUTS=$(az deployment group show --resource-group rg-ftgo-dev-eastus --name "$NAME" --query properties.outputs -o json)
           AGW_FQDN=$(echo "$OUTPUTS" | jq -r '.apiGatewayFqdn.value')
           SCALAR_URL=$(echo "$OUTPUTS" | jq -r '.scalarUrl.value')
           AGW_REDIRECT=$(echo "$OUTPUTS" | jq -r '.apiGatewayRedirectUri.value')
@@ -237,8 +237,8 @@ jobs:
             echo "## ppe — Bicep what-if preview"
             echo ""
             echo '```'
-            az deployment sub what-if \
-              --location eastus \
+            az deployment group what-if \
+              --resource-group rg-ftgo-ppe-eastus \
               --template-file infra/bicep/azure.bicep \
               --parameters infra/bicep/azure.ppe.bicepparam \
               --parameters imageTag="${IMAGE_TAG}" \
@@ -254,15 +254,15 @@ jobs:
         run: |
           set -euo pipefail
           NAME="ftgo-ppe-$(date -u +%Y%m%d%H%M%S)"
-          az deployment sub create \
-            --location eastus \
+          az deployment group create \
+            --resource-group rg-ftgo-ppe-eastus \
             --template-file infra/bicep/azure.bicep \
             --parameters infra/bicep/azure.ppe.bicepparam \
             --parameters imageTag="${IMAGE_TAG}" \
             --name "$NAME" \
             --only-show-errors \
             --output none
-          OUTPUTS=$(az deployment sub show --name "$NAME" --query properties.outputs -o json)
+          OUTPUTS=$(az deployment group show --resource-group rg-ftgo-ppe-eastus --name "$NAME" --query properties.outputs -o json)
           AGW_FQDN=$(echo "$OUTPUTS" | jq -r '.apiGatewayFqdn.value')
           SCALAR_URL=$(echo "$OUTPUTS" | jq -r '.scalarUrl.value')
           AGW_REDIRECT=$(echo "$OUTPUTS" | jq -r '.apiGatewayRedirectUri.value')
@@ -321,7 +321,7 @@ jobs:
       - name: Preview infra changes (what-if — prod)
         # Prod has a required-reviewer protection rule on the GitHub Environment.
         # The what-if output is rendered to the job summary BEFORE the actual
-        # `az deployment sub create`, so the approver sees the resource diff
+        # `az deployment group create`, so the approver sees the resource diff
         # in the GitHub UI when deciding whether to approve the deploy.
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
@@ -333,8 +333,8 @@ jobs:
             echo "_Review the resource changes below before approving the deployment._"
             echo ""
             echo '```'
-            az deployment sub what-if \
-              --location eastus \
+            az deployment group what-if \
+              --resource-group rg-ftgo-prod-eastus \
               --template-file infra/bicep/azure.bicep \
               --parameters infra/bicep/azure.prod.bicepparam \
               --parameters imageTag="${IMAGE_TAG}" \
@@ -350,15 +350,15 @@ jobs:
         run: |
           set -euo pipefail
           NAME="ftgo-prod-$(date -u +%Y%m%d%H%M%S)"
-          az deployment sub create \
-            --location eastus \
+          az deployment group create \
+            --resource-group rg-ftgo-prod-eastus \
             --template-file infra/bicep/azure.bicep \
             --parameters infra/bicep/azure.prod.bicepparam \
             --parameters imageTag="${IMAGE_TAG}" \
             --name "$NAME" \
             --only-show-errors \
             --output none
-          OUTPUTS=$(az deployment sub show --name "$NAME" --query properties.outputs -o json)
+          OUTPUTS=$(az deployment group show --resource-group rg-ftgo-prod-eastus --name "$NAME" --query properties.outputs -o json)
           AGW_FQDN=$(echo "$OUTPUTS" | jq -r '.apiGatewayFqdn.value')
           SCALAR_URL=$(echo "$OUTPUTS" | jq -r '.scalarUrl.value')
           AGW_REDIRECT=$(echo "$OUTPUTS" | jq -r '.apiGatewayRedirectUri.value')

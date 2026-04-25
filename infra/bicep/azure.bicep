@@ -1,9 +1,9 @@
 metadata name = 'azure-orchestrator'
-metadata description = 'Subscription-scope orchestrator that creates rg-ftgo-{env}-{location} and deploys Log Analytics, App Insights, Key Vault, the Container Apps managed environment, the 7 FTGO container apps, and Key Vault RBAC for their managed identities.'
+metadata description = 'Resource-group-scope orchestrator that deploys Log Analytics, App Insights, Key Vault, the Container Apps managed environment, the 7 FTGO container apps, and Key Vault RBAC for their managed identities. The target resource group is created beforehand by infra/bicep/bootstrap.bicep, so the CD UAMI only needs RG-scope Contributor (least privilege).'
 
 extension az
 
-targetScope = 'subscription'
+targetScope = 'resourceGroup'
 
 @description('Logical environment name; controls resource-group, naming, and ASPNETCORE_ENVIRONMENT.')
 @allowed([ 'dev', 'ppe', 'prod' ])
@@ -36,22 +36,14 @@ var regionShortMap = {
 }
 var regionShort = regionShortMap[?location] ?? toLower(take(location, 3))
 
-var rgName       = 'rg-ftgo-${environmentName}-${location}'
 var lawName      = 'ftgo-${environmentName}-law-${regionShort}'
 var aiName       = 'ftgo-${environmentName}-ai-${regionShort}'
 var caeName      = 'ftgo-${environmentName}-cae-${regionShort}'
 // KV global uniqueness: 'kv-ftgo-{env}-{8-char hash of rg.id}' = max 21 chars (within the 24 limit).
-var kvName       = 'kv-ftgo-${environmentName}-${take(uniqueString(subscription().subscriptionId, rgName), 8)}'
-
-resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name:     rgName
-  location: location
-  tags:     tags
-}
+var kvName       = 'kv-ftgo-${environmentName}-${take(uniqueString(resourceGroup().id), 8)}'
 
 module logAnalytics 'modules/log-analytics.bicep' = {
   name:  'law'
-  scope: resourceGroup(rg.name)
   params: {
     name:     lawName
     location: location
@@ -61,7 +53,6 @@ module logAnalytics 'modules/log-analytics.bicep' = {
 
 module appInsights 'modules/app-insights.bicep' = {
   name:  'ai'
-  scope: resourceGroup(rg.name)
   params: {
     name:                aiName
     location:            location
@@ -72,7 +63,6 @@ module appInsights 'modules/app-insights.bicep' = {
 
 module keyVault 'modules/key-vault.bicep' = {
   name:  'kv'
-  scope: resourceGroup(rg.name)
   params: {
     name:     kvName
     location: location
@@ -83,7 +73,6 @@ module keyVault 'modules/key-vault.bicep' = {
 
 module containerAppsEnv 'modules/container-apps-environment.bicep' = {
   name:  'cae'
-  scope: resourceGroup(rg.name)
   params: {
     name:                    caeName
     location:                location
@@ -95,7 +84,6 @@ module containerAppsEnv 'modules/container-apps-environment.bicep' = {
 
 module acaStack 'modules/aca-stack.bicep' = {
   name:  'aca-stack'
-  scope: resourceGroup(rg.name)
   params: {
     environmentName:             environmentName
     location:                    location
@@ -110,7 +98,6 @@ module acaStack 'modules/aca-stack.bicep' = {
 
 module kvRbac 'modules/key-vault-rbac.bicep' = {
   name:  'kv-rbac'
-  scope: resourceGroup(rg.name)
   params: {
     keyVaultName: keyVault.outputs.keyVaultName
     principalIds: acaStack.outputs.principalIds
@@ -118,7 +105,7 @@ module kvRbac 'modules/key-vault-rbac.bicep' = {
 }
 
 @description('Resource group containing every FTGO resource for this environment.')
-output resourceGroupName string = rg.name
+output resourceGroupName string = resourceGroup().name
 
 @description('Log Analytics workspace resource ID.')
 output logAnalyticsWorkspaceId string = logAnalytics.outputs.workspaceId
