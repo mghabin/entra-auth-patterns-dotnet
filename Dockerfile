@@ -45,7 +45,13 @@ COPY src/Ftgo.Auth/packages.lock.json                       src/Ftgo.Auth/
 COPY src/Ftgo.Auth.Client/packages.lock.json                src/Ftgo.Auth.Client/
 
 RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet restore -a "${TARGETARCH:-amd64}" --locked-mode src/${PROJECT}/${PROJECT}.csproj
+    dotnet restore -a "${TARGETARCH:-amd64}" src/${PROJECT}/${PROJECT}.csproj
+# NOTE: --locked-mode intentionally NOT used here. CI (`ci.yml`) restores the
+# whole solution with --locked-mode on every PR/push, so lock-file integrity
+# is already enforced before any image is built. Adding it here would conflict
+# with the per-RID restore (lock files don't include runtime identifiers, so
+# `-a $TARGETARCH` produces an RID set the lock file never recorded → NU1004).
+# Matches dotnet/dotnet-docker official samples.
 
 # ─── Stage 2: publish ───
 FROM restore AS publish
