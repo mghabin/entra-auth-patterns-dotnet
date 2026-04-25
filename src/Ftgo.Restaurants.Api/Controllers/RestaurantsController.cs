@@ -13,7 +13,7 @@ public sealed class RestaurantsController : ControllerBase
     [HttpGet("system")]
     public IActionResult System() => Ok(new
     {
-        service = "RestaurantService",
+        service = "Ftgo.Restaurants.Api",
         flow = "app (S2S, multi-tenant)",
         callerTenant = User.FindFirst("tid")?.Value,
         azp = User.FindFirst("azp")?.Value ?? User.FindFirst("appid")?.Value,

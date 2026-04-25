@@ -16,7 +16,7 @@ public sealed class OrdersController : ControllerBase
     [RequiredScope("orders.read")]
     public IActionResult WhoAmI() => Ok(new
     {
-        service = "OrderService",
+        service = "Ftgo.Orders.Api",
         flow = "user (OBO)",
         oid = User.FindFirst("oid")?.Value,
         tid = User.FindFirst("tid")?.Value,
@@ -30,7 +30,7 @@ public sealed class OrdersController : ControllerBase
     [RequireClientApp]
     public IActionResult System() => Ok(new
     {
-        service = "OrderService",
+        service = "Ftgo.Orders.Api",
         flow = "app (S2S)",
         azp = User.FindFirst("azp")?.Value ?? User.FindFirst("appid")?.Value,
         roles = User.FindAll("roles").Select(c => c.Value).ToArray(),
