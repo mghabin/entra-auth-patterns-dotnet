@@ -9,17 +9,14 @@ param name string
 @description('Azure region for the environment.')
 param location string
 
-@description('Resource ID of the Log Analytics workspace receiving container app logs.')
-param logAnalyticsWorkspaceId string
-
-@description('Customer ID (workspace GUID) of the Log Analytics workspace.')
-param logAnalyticsCustomerId string
+@description('Name of the Log Analytics workspace receiving container app logs (design-time-known to keep what-if precise).')
+param logAnalyticsWorkspaceName string
 
 @description('Tags applied to the environment.')
 param tags object = {}
 
 resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
-  name: last(split(logAnalyticsWorkspaceId, '/'))
+  name: logAnalyticsWorkspaceName
 }
 
 resource cae 'Microsoft.App/managedEnvironments@2024-10-02-preview' = {
@@ -30,7 +27,7 @@ resource cae 'Microsoft.App/managedEnvironments@2024-10-02-preview' = {
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
-        customerId: logAnalyticsCustomerId
+        customerId: law.properties.customerId
         sharedKey:  law.listKeys().primarySharedKey
       }
     }
