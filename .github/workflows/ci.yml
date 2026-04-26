@@ -51,6 +51,22 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Coverage summary
+        if: always()
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: ./TestResults/**/coverage.cobertura.xml
+          format: markdown
+          output: both
+          badge: true
+          hide_complexity: true
+          thresholds: '50 75'
+
+      - name: Append coverage to step summary
+        if: always() && hashFiles('code-coverage-results.md') != ''
+        run: cat code-coverage-results.md >> "$GITHUB_STEP_SUMMARY"
+
+
       - name: Format check
         run: dotnet format EntraAuthPatterns.slnx --verify-no-changes --no-restore --severity warn
 
@@ -140,3 +156,22 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.7
         with:
           args: -color
+
+  # Scan for accidentally committed secrets on every PR + push to main.
+  # gitleaks ships a default ruleset (AWS keys, GitHub tokens, Azure conn
+  # strings, JWT-shaped values, etc.). The repo-root .gitleaks.toml
+  # allowlists known false positives (Azure built-in RBAC role GUIDs).
+  gitleaks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_ENABLE_SUMMARY: true

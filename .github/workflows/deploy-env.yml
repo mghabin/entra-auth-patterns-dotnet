@@ -93,6 +93,38 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      # Verify Sigstore/GitHub build-provenance attestations exist for every
+      # service image we're about to roll out. cd.yml's build-images job emits
+      # them via attest-build-provenance@v2; deploy fails fast if any are
+      # missing or the chain doesn't verify back to this repo. Provenance is
+      # otherwise generated-but-not-enforced.
+      - name: Verify image attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_FULL: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          fail=0
+          for svc in apigateway orders-api restaurants-api kitchen-worker; do
+            ref="ghcr.io/${OWNER}/ftgo-${svc}:${IMAGE_TAG}"
+            echo "::group::verify $ref"
+            if gh attestation verify "oci://${ref}" \
+                 --repo "${REPO_FULL}" \
+                 --predicate-type 'https://slsa.dev/provenance/v1' 2>&1; then
+              echo "✓ attestation OK"
+            else
+              echo "::error::no valid SLSA provenance for $ref"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Refusing to deploy unattested images. Re-run cd.yml's build-images job and try again."
+            exit 1
+          fi
+
       - name: Resolve entraConfig (with warm-env guard)
         id: entra
         env:
@@ -206,12 +238,14 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://${AGW_FQDN}/health/live"
-          echo "Polling ${URL} (60s timeout)…"
-          # ACA cold-start can take ~30s after a fresh image; poll for up to 60s.
+          echo "Polling ${URL} (180s timeout)…"
+          # ACA cold-start (image pull + container init + ASP.NET warmup) can
+          # exceed 60s after a fresh image push; poll for up to 180s to avoid
+          # flaky CD failures that mask actual deploy success.
           # /health/live is checked instead of /health/ready because the BFF's
           # readiness depends on Entra config which is provisioned out-of-band
           # (would false-fail on a cold env).
-          for i in $(seq 1 12); do
+          for i in $(seq 1 36); do
             if curl --fail --silent --show-error --max-time 5 "$URL" >/dev/null; then
               echo "✓ ${URL} returned 200 (attempt ${i})"
               exit 0
@@ -219,5 +253,5 @@ jobs:
             echo "  attempt ${i} — not ready yet, sleeping 5s"
             sleep 5
           done
-          echo "✗ ${URL} did not return 200 within 60s"
+          echo "✗ ${URL} did not return 200 within 180s"
           exit 1
