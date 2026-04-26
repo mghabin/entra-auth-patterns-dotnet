@@ -126,6 +126,19 @@ module kvRbac 'modules/key-vault-rbac.bicep' = {
   ]
 }
 
+// Prod safety net: prevent accidental `az group delete` / portal-delete of the
+// entire RG. CanNotDelete still lets ARM perform in-place updates but blocks
+// destructive operations until the lock is removed. Dev/PPE intentionally have
+// no lock so cd-cleanup and tear-down flows stay simple.
+resource rgDeleteLock 'Microsoft.Authorization/locks@2020-05-01' = if (environmentName == 'prod') {
+  name: 'ftgo-prod-rg-delete-lock'
+  scope: resourceGroup()
+  properties: {
+    level: 'CanNotDelete'
+    notes: 'Prod RG delete protection. Remove via `az lock delete` only as part of an approved teardown.'
+  }
+}
+
 @description('Resource group containing every FTGO resource for this environment.')
 output resourceGroupName string = resourceGroup().name
 
