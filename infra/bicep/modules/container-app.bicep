@@ -1,5 +1,5 @@
 metadata name = 'container-app'
-metadata description = 'Single Azure Container App (Consumption) with system-assigned MI, external HTTP ingress on 8080, /health liveness probe, and 0–3 HTTP-concurrency scaling.'
+metadata description = 'Single Azure Container App (Consumption) with system-assigned MI, external HTTP ingress on 8080, /health/live + /health/ready probes, and 0–3 HTTP-concurrency scaling.'
 
 extension az
 
@@ -91,13 +91,25 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
             {
               type: 'Liveness'
               httpGet: {
-                path: '/health'
+                path: '/health/live'
                 port: 8080
                 scheme: 'HTTP'
               }
               initialDelaySeconds: 10
               periodSeconds:       30
               timeoutSeconds:      5
+              failureThreshold:    3
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health/ready'
+                port: 8080
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 5
+              periodSeconds:       10
+              timeoutSeconds:      3
               failureThreshold:    3
             }
           ] : []

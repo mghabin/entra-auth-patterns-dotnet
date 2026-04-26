@@ -24,5 +24,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapEntraAuthScalar(builder.Configuration, "orders.read");
-app.MapHealthChecks("/health");
+app.MapEntraAuthHealthChecks();
 await app.RunAsync();

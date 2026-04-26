@@ -16,5 +16,5 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapOpenApi();
 app.MapScalarApiReference();
-app.MapHealthChecks("/health");
+app.MapEntraAuthHealthChecks();
 await app.RunAsync();
