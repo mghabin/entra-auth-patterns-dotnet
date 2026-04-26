@@ -196,3 +196,25 @@ jobs:
             echo ""
             echo "_Entra app regs are provisioned out-of-band via_ \`scripts/provision-apps.sh ENV=${ENV_NAME}\`_, which writes the_ \`ENTRA_CONFIG_JSON\` _GitHub env var consumed here._"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke-test /health/live
+        env:
+          AGW_FQDN: ${{ steps.deploy.outputs.apigateway_fqdn }}
+        run: |
+          set -euo pipefail
+          URL="https://${AGW_FQDN}/health/live"
+          echo "Polling ${URL} (60s timeout)…"
+          # ACA cold-start can take ~30s after a fresh image; poll for up to 60s.
+          # /health/live is checked instead of /health/ready because the BFF's
+          # readiness depends on Entra config which is provisioned out-of-band
+          # (would false-fail on a cold env).
+          for i in $(seq 1 12); do
+            if curl --fail --silent --show-error --max-time 5 "$URL" >/dev/null; then
+              echo "✓ ${URL} returned 200 (attempt ${i})"
+              exit 0
+            fi
+            echo "  attempt ${i} — not ready yet, sleeping 5s"
+            sleep 5
+          done
+          echo "✗ ${URL} did not return 200 within 60s"
+          exit 1
