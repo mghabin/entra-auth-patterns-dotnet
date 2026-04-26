@@ -50,6 +50,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
@@ -121,6 +122,28 @@ jobs:
           subject-name: ghcr.io/${{ github.repository_owner }}/ftgo-${{ steps.meta.outputs.SHORT_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      # Vulnerability scan of the freshly-pushed image. Fails the build on
+      # CRITICAL/HIGH OS-package or library findings so we don't ship known
+      # vulnerable images to ACA. Results are also uploaded to the GitHub
+      # security tab as SARIF.
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0 (post-supply-chain-compromise; GHSA-69fq-xp46-6x23 affected ≤0.32.0)
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/ftgo-${{ steps.meta.outputs.SHORT_NAME }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-${{ steps.meta.outputs.SHORT_NAME }}.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ steps.meta.outputs.SHORT_NAME }}.sarif
+          category: trivy-${{ steps.meta.outputs.SHORT_NAME }}
 
   resolve-image-tag:
     # Resolve image tag once and pass it to all downstream env deploys.
