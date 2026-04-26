@@ -8,11 +8,12 @@ public static class WebTelemetryExtensions
 {
     public static IServiceCollection AddEntraAuthWebTelemetry(
         this IServiceCollection services,
-        string serviceName)
+        string serviceName,
+        params string[] additionalActivitySources)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddEntraAuthTelemetry(serviceName);
+        services.AddEntraAuthTelemetry(serviceName, additionalActivitySources);
 
         services
             .AddOpenTelemetry()

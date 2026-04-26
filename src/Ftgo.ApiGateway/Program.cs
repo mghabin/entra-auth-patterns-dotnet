@@ -1,3 +1,4 @@
+using Ftgo.ApiGateway;
 using Ftgo.Auth;
 using Microsoft.Identity.Web;
 
@@ -10,7 +11,7 @@ builder.Services.AddEntraAuth(builder.Configuration, auth =>
         .AddDownstreamApi("Restaurants", builder.Configuration.GetSection("DownstreamApis:Restaurants"))
         .AddDistributedTokenCaches();
 });
-builder.Services.AddEntraAuthWebTelemetry("Ftgo.ApiGateway");
+builder.Services.AddEntraAuthWebTelemetry("Ftgo.ApiGateway", BffActivitySource.Name);
 builder.Services.AddEntraAuthProblemDetails();
 builder.Services.AddEntraAuthOpenApi(builder.Configuration, "orders.read");
 builder.Services.AddHealthChecks();

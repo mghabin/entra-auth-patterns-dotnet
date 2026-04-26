@@ -14,7 +14,8 @@ public static class TelemetryExtensions
 {
     public static IServiceCollection AddEntraAuthTelemetry(
         this IServiceCollection services,
-        string serviceName)
+        string serviceName,
+        params string[] additionalActivitySources)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
@@ -30,6 +31,10 @@ public static class TelemetryExtensions
             .WithTracing(t =>
             {
                 t.AddHttpClientInstrumentation();
+                foreach (var source in additionalActivitySources)
+                {
+                    t.AddSource(source);
+                }
                 if (hasOtlp) t.AddOtlpExporter();
                 if (hasAzureMonitor) t.AddAzureMonitorTraceExporter(o => o.ConnectionString = aiConnectionString);
             })
