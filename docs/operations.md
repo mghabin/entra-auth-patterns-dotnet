@@ -49,6 +49,18 @@ gh workflow run branch-protection.yml
 The drift job will fail if anyone has changed protection rules in the
 GitHub UI without updating `main.json`.
 
+### One-time setup: BRANCH_PROTECTION_TOKEN secret
+
+The default `GITHUB_TOKEN` cannot manage branch protection — the API
+requires repo-administration permission, which the automatic workflow
+token cannot grant. Provision a fine-grained PAT (or, preferably, a
+GitHub App installation token) with **Administration: Read and write**
+scope on this repo, then store it as the repo secret
+`BRANCH_PROTECTION_TOKEN`. The apply and drift jobs both need it.
+
+Until that secret is set, the nightly drift cron will fail with a
+clear error. Tracked in issue #67.
+
 ## Nightly cost-safety
 
 `cd-cleanup.yml` runs at 03:00 UTC and scales every container app in
@@ -120,3 +132,13 @@ az containerapp logs show \
 * **Branch protection drift alert** — open `.github/branch-protection/main.json`,
   reconcile against the failure diff in the workflow log, commit a fix,
   then re-run `branch-protection.yml` to apply.
+* **CD `build-images` fails with Trivy CRITICAL/HIGH** — open the SARIF
+  upload in the Security tab to see the CVE list. Fix order:
+  bump the base image (Dockerfile FROM tag) and let Dependabot's
+  docker ecosystem PR land, OR rebuild after upstream pushes a fix.
+  Unfixable CVEs are already filtered (`ignore-unfixed: true`); a
+  failure means there *is* a fix available somewhere in the dep tree.
+* **CD aborts with "Refusing to deploy unattested images"** — image was
+  pushed before the SLSA provenance pipeline was added, or the
+  attestation got pruned. Re-run `cd.yml`'s `build-images` job to
+  rebuild and re-attest.
