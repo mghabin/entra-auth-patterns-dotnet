@@ -128,7 +128,7 @@ jobs:
       # vulnerable images to ACA. Results are also uploaded to the GitHub
       # security tab as SARIF.
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0 (post-supply-chain-compromise; GHSA-69fq-xp46-6x23 affected ≤0.32.0)
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/ftgo-${{ steps.meta.outputs.SHORT_NAME }}@${{ steps.build.outputs.digest }}
           format: sarif
