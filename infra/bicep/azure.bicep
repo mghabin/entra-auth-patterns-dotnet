@@ -25,6 +25,9 @@ param tags object = {
   managedBy:   'bicep'
 }
 
+@description('Resolved Entra wiring (tenantId, app reg appIds, kitchen-worker MI clientId, downstream FQDNs). Empty `{}` on cold deploy → apps fall back to appsettings.json placeholders. Populated by scripts/provision-apps.sh after Entra app regs and worker MI are known.')
+param entraConfig object = {}
+
 // Region → short token folded into resource names. Falls back to first 3 chars for unmapped regions.
 var regionShortMap = {
   eastus:       'eus'
@@ -92,6 +95,7 @@ module acaStack 'modules/aca-stack.bicep' = {
     containerRegistry:           containerRegistry
     imageTag:                    imageTag
     regionShort:                 regionShort
+    entraConfig:                 entraConfig
     tags:                        tags
   }
 }
