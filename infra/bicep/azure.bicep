@@ -79,10 +79,12 @@ module containerAppsEnv 'modules/container-apps-environment.bicep' = {
   params: {
     name:                    caeName
     location:                location
-    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
-    logAnalyticsCustomerId:  logAnalytics.outputs.customerId
+    logAnalyticsWorkspaceName: lawName
     tags:                    tags
   }
+  dependsOn: [
+    logAnalytics
+  ]
 }
 
 module acaStack 'modules/aca-stack.bicep' = {
@@ -103,9 +105,12 @@ module acaStack 'modules/aca-stack.bicep' = {
 module kvRbac 'modules/key-vault-rbac.bicep' = {
   name:  'kv-rbac'
   params: {
-    keyVaultName: keyVault.outputs.keyVaultName
+    keyVaultName: kvName
     principalIds: acaStack.outputs.principalIds
   }
+  dependsOn: [
+    keyVault
+  ]
 }
 
 @description('Resource group containing every FTGO resource for this environment.')
