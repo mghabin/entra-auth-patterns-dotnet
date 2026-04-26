@@ -28,12 +28,12 @@ param tags object = {}
 @description('Resolved Entra wiring (tenantId, app reg appIds, kitchen-worker MI clientId, downstream FQDNs). Empty `{}` on cold deploy → no Entra env vars are injected and apps fall back to appsettings.json placeholders. Populated by scripts/provision-apps.sh after Entra app regs and worker MI are known.')
 param entraConfig object = {}
 
-@description('Service definitions. project = csproj folder name; shortName = lowercase image/name suffix (also used as the Bicep map key); isWebApp = whether to expose HTTP ingress + /health/live + /health/ready probes.')
+@description('Service definitions. project = csproj folder name; shortName = lowercase image/name suffix; key = stable Bicep map key (camelCase) used to dispatch env vars and build the output map; isWebApp = whether to expose HTTP ingress + /health/live + /health/ready probes.')
 param services array = [
-  { project: 'Ftgo.ApiGateway',      shortName: 'apigateway',       isWebApp: true  }
-  { project: 'Ftgo.Orders.Api',      shortName: 'orders-api',       isWebApp: true  }
-  { project: 'Ftgo.Restaurants.Api', shortName: 'restaurants-api',  isWebApp: true  }
-  { project: 'Ftgo.Kitchen.Worker',  shortName: 'kitchen-worker',   isWebApp: false }
+  { project: 'Ftgo.ApiGateway',      shortName: 'apigateway',       key: 'apiGateway',     isWebApp: true  }
+  { project: 'Ftgo.Orders.Api',      shortName: 'orders-api',       key: 'ordersApi',      isWebApp: true  }
+  { project: 'Ftgo.Restaurants.Api', shortName: 'restaurants-api',  key: 'restaurantsApi', isWebApp: true  }
+  { project: 'Ftgo.Kitchen.Worker',  shortName: 'kitchen-worker',   key: 'kitchenWorker',  isWebApp: false }
 ]
 
 // `entraConfig` is treated as all-or-nothing. We require `tenantId` as the marker key
@@ -97,16 +97,19 @@ var kitchenWorkerEnv = hasEntra ? [
   { name: 'Downstream__Scope',   value: 'api://${entraConfig.ordersApiAppId}/.default' }
 ] : []
 
-// Per-service env arrays indexed by `services` ordering. Must match the canonical
-// (apigateway, orders-api, restaurants-api, kitchen-worker) order documented below.
-var serviceEnvs = [
-  apiGatewayEnv
-  ordersApiEnv
-  restaurantsApiEnv
-  kitchenWorkerEnv
-]
+// Per-service env arrays, dispatched by service `key` (camelCase). A service
+// whose key is absent here gets an empty extraEnvVars array (e.g. a hypothetical
+// new "billingApi" service added without env wiring would deploy bare). This
+// removes the previous index-based coupling between this map and the `services`
+// param ordering.
+var envByKey = hasEntra ? {
+  apiGateway:     apiGatewayEnv
+  ordersApi:      ordersApiEnv
+  restaurantsApi: restaurantsApiEnv
+  kitchenWorker:  kitchenWorkerEnv
+} : {}
 
-module containerApps 'container-app.bicep' = [for (svc, i) in services: {
+module containerApps 'container-app.bicep' = [for svc in services: {
   name: 'aca-${svc.shortName}'
   params: {
     appName:                     'ftgo-${environmentName}-${svc.shortName}-${regionShort}'
@@ -117,15 +120,18 @@ module containerApps 'container-app.bicep' = [for (svc, i) in services: {
     appInsightsConnectionString: appInsightsConnectionString
     environmentName:             environmentName
     enableIngress:               svc.isWebApp
-    extraEnvVars:                serviceEnvs[i]
+    extraEnvVars:                envByKey[?svc.key] ?? []
     tags:                        tags
   }
 }]
 
 // Map output is hard-coded to the canonical service ordering of the `services`
-// param default. If callers override `services`, they must keep the same ordering
-// (apigateway, orders-api, restaurants-api, kitchen-worker) or rebuild the map.
-@description('Map of camelCase key → { fqdn, principalId, name } for the deployed apps.')
+// param default. Bicep does not allow for-expressions inside `toObject(...)` for
+// output values (BCP138) AND vars cannot reference module outputs (BCP182), so
+// neither dynamic-key construction works. If callers override `services`, they
+// must keep the same ordering (apiGateway, ordersApi, restaurantsApi,
+// kitchenWorker) or rebuild this map.
+@description('Map of camelCase key → { fqdn, principalId, name } for the deployed apps. Keys are the camelCase form of services[*].shortName.')
 output services object = {
   apiGateway:      { fqdn: containerApps[0].outputs.fqdn, principalId: containerApps[0].outputs.principalId, name: containerApps[0].outputs.name }
   ordersApi:       { fqdn: containerApps[1].outputs.fqdn, principalId: containerApps[1].outputs.principalId, name: containerApps[1].outputs.name }
