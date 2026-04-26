@@ -30,6 +30,7 @@
 # Usage:
 #   ./scripts/provision-apps.sh ENV=dev
 #   IMAGE_TAG=sha-abc1234 ./scripts/provision-apps.sh ENV=dev
+#   WHAT_IF=1 ./scripts/provision-apps.sh ENV=ppe   # preview only; no resource changes
 #
 # Prereqs: bash 4+, az CLI logged in, gh CLI authenticated, jq.
 
@@ -83,6 +84,17 @@ deploy_azure_bicep() {
   local stage="$2"
   local name="ftgo-${ENV}-$(date -u +%Y%m%d%H%M%S)-${stage}"
   echo "    deploying azure.bicep (name=$name, entraConfig=$([[ "$entra_config_json" == "{}" ]] && echo empty || echo populated))" >&2
+  if [[ "${WHAT_IF:-0}" == "1" ]]; then
+    echo "    WHAT_IF=1 — preview only, skipping create" >&2
+    az deployment group what-if \
+      --resource-group "$RG_NAME" \
+      --template-file "$ROOT/infra/bicep/azure.bicep" \
+      --parameters "$ROOT/infra/bicep/azure.${ENV}.bicepparam" \
+      --parameters imageTag="$IMAGE_TAG" entraConfig="$entra_config_json" \
+      --only-show-errors >&2
+    echo "$name"
+    return 0
+  fi
   az deployment group create \
     --resource-group "$RG_NAME" \
     --template-file "$ROOT/infra/bicep/azure.bicep" \
@@ -126,6 +138,20 @@ SCALAR_REDIRECT="https://${APIGATEWAY_FQDN}/scalar/v1"
 export AZURE_TENANT_ID="$TENANT_ID"
 
 WORKER_MI_JSON=$(jq -nc --arg k "$KITCHEN_MI" '{kitchenWorker: $k}')
+
+if [[ "${WHAT_IF:-0}" == "1" ]]; then
+  echo "    WHAT_IF=1 — preview only, skipping tenant-scope create"
+  az deployment tenant what-if \
+    --location eastus \
+    --template-file "$ROOT/infra/bicep/main.bicep" \
+    --parameters "$ROOT/infra/bicep/main.${ENV}.bicepparam" \
+    --parameters \
+        apiGatewayRedirectUri="$AGW_REDIRECT" \
+        scalarRedirectUri="$SCALAR_REDIRECT" \
+        workerMiPrincipalIds="$WORKER_MI_JSON" \
+    --only-show-errors
+  exit 0
+fi
 
 az deployment tenant create \
   --name "$ENTRA_DEPLOY" \
