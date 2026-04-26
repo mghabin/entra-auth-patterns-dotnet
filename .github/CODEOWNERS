@@ -1,0 +1,27 @@
+# CODEOWNERS — auto-request review on touched paths.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-security/customizing-your-repository/about-code-owners
+#
+# Order matters: the LAST matching pattern wins for a given file.
+
+# Global default reviewer.
+* @mghabin
+
+# Infrastructure-as-code (Bicep + bootstrap scripts) — handle with extra care
+# because changes ripple across every environment.
+/infra/                 @mghabin
+/scripts/               @mghabin
+/.github/workflows/     @mghabin
+/.github/dependabot.yml @mghabin
+/.github/CODEOWNERS     @mghabin
+
+# Auth/identity surface — every change here is a potential security event.
+/src/Ftgo.Auth/         @mghabin
+/docs/credential-patterns/ @mghabin
+/SECURITY.md            @mghabin
+
+# Engineering-guide-style root config files — TreatWarningsAsErrors and lock
+# files in particular have wide blast radius if loosened.
+/Directory.Build.props  @mghabin
+/Directory.Packages.props @mghabin
+/global.json            @mghabin
+/Dockerfile             @mghabin
