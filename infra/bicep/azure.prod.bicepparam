@@ -8,6 +8,6 @@
 using 'azure.bicep'
 
 param environmentName   = 'prod'
-param location          = 'eastus'
+param location          = readEnvironmentVariable('LOCATION', 'eastus')
 param imageTag          = readEnvironmentVariable('IMAGE_TAG',          'latest')
 param containerRegistry = readEnvironmentVariable('CONTAINER_REGISTRY', 'ghcr.io/mghabin')

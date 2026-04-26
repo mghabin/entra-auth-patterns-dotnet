@@ -63,7 +63,9 @@ done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-LOCATION="${LOCATION:-eastus}"
+# Export LOCATION so azure.${ENV}.bicepparam's `readEnvironmentVariable('LOCATION', 'eastus')`
+# picks it up — keeps the script's RG/app-name derivation in lock-step with bicep.
+export LOCATION="${LOCATION:-eastus}"
 case "$LOCATION" in
   eastus)      REGION_SHORT="eus" ;;
   eastus2)     REGION_SHORT="eus2" ;;
