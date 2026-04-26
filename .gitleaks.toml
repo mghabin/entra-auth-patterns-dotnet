@@ -1,0 +1,29 @@
+# gitleaks config — extends the default ruleset with repo-specific allowlists
+# for known false positives. Re-test locally with `gitleaks detect --no-banner`.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlists for known non-secret values"
+
+# Azure built-in role definition GUIDs are public, well-documented identifiers
+# (e.g. https://learn.microsoft.com/azure/role-based-access-control/built-in-roles).
+# They look like API keys to the generic-api-key heuristic but are not secrets.
+paths = [
+  '''infra/bicep/.*\.bicep$''',
+  '''infra/bicep/.*\.bicepparam$''',
+]
+
+# Belt and braces for the specific role-definition GUIDs we reference.
+# Adding regexes here means we don't have to allow-list every bicep file
+# that happens to mention an RBAC role.
+regexes = [
+  # User Access Administrator
+  '''18d7d88d-d35e-4fb5-a5c3-7773c20a72d9''',
+  # Key Vault Secrets User
+  '''4633458b-17de-408a-b874-0445c86b69e6''',
+  # Key Vault Administrator
+  '''00482a5a-887f-4fb3-b363-3b7fe8e74483''',
+  # Contributor
+  '''b24988ac-6180-42a0-ab88-20f7382dd24c''',
+]
