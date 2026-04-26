@@ -238,12 +238,14 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://${AGW_FQDN}/health/live"
-          echo "Polling ${URL} (60s timeout)…"
-          # ACA cold-start can take ~30s after a fresh image; poll for up to 60s.
+          echo "Polling ${URL} (180s timeout)…"
+          # ACA cold-start (image pull + container init + ASP.NET warmup) can
+          # exceed 60s after a fresh image push; poll for up to 180s to avoid
+          # flaky CD failures that mask actual deploy success.
           # /health/live is checked instead of /health/ready because the BFF's
           # readiness depends on Entra config which is provisioned out-of-band
           # (would false-fail on a cold env).
-          for i in $(seq 1 12); do
+          for i in $(seq 1 36); do
             if curl --fail --silent --show-error --max-time 5 "$URL" >/dev/null; then
               echo "✓ ${URL} returned 200 (attempt ${i})"
               exit 0
@@ -251,5 +253,5 @@ jobs:
             echo "  attempt ${i} — not ready yet, sleeping 5s"
             sleep 5
           done
-          echo "✗ ${URL} did not return 200 within 60s"
+          echo "✗ ${URL} did not return 200 within 180s"
           exit 1
