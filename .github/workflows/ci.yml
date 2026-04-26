@@ -77,12 +77,30 @@ jobs:
       - name: Install Bicep CLI
         run: az bicep install
 
-      - name: Bicep build (lints templates)
+      - name: Bicep build (templates + modules) — fail on any warning
+        # az bicep build runs the linter using infra/bicep/bicepconfig.json.
+        # We tee stderr+stdout, then fail if any "Warning" or "Error" line slipped through
+        # (ARM build itself only fails on errors, but our bicepconfig has strict rules
+        # that emit warnings — those should block CI).
         run: |
-          az bicep build --file infra/bicep/main.bicep      --outdir /tmp/bicep-out
-          az bicep build --file infra/bicep/azure.bicep     --outdir /tmp/bicep-out
-          az bicep build --file infra/bicep/bootstrap.bicep --outdir /tmp/bicep-out
-          echo "main.bicep + azure.bicep + bootstrap.bicep + modules built clean"
+          set -euo pipefail
+          mkdir -p /tmp/bicep-out
+          fail=0
+          for f in infra/bicep/main.bicep infra/bicep/azure.bicep infra/bicep/bootstrap.bicep infra/bicep/modules/*.bicep; do
+            echo "::group::bicep build $f"
+            out=$(az bicep build --file "$f" --outdir /tmp/bicep-out 2>&1 || true)
+            echo "$out"
+            echo "::endgroup::"
+            if echo "$out" | grep -E ' : (Warning|Error) ' >/dev/null; then
+              echo "::error file=$f::bicep lint warning/error in $f"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::bicep lint failures found — see grouped output above"
+            exit 1
+          fi
+          echo "All bicep templates + modules built clean (zero warnings)."
 
       - name: Bicep build-params
         env:
@@ -90,8 +108,21 @@ jobs:
           GH_OWNER:        mghabin
           GH_REPO:         entra-auth-patterns-dotnet
         run: |
+          set -euo pipefail
+          fail=0
           for env in dev ppe prod; do
-            az bicep build-params --file "infra/bicep/main.${env}.bicepparam"      --outfile "/tmp/bicep-out/main.${env}.parameters.json"
-            az bicep build-params --file "infra/bicep/bootstrap.${env}.bicepparam" --outfile "/tmp/bicep-out/bootstrap.${env}.parameters.json"
+            for stem in main bootstrap azure; do
+              file="infra/bicep/${stem}.${env}.bicepparam"
+              [ -f "$file" ] || continue
+              echo "::group::bicep build-params $file"
+              out=$(az bicep build-params --file "$file" --outfile "/tmp/bicep-out/${stem}.${env}.parameters.json" 2>&1 || true)
+              echo "$out"
+              echo "::endgroup::"
+              if echo "$out" | grep -E ' : (Warning|Error) ' >/dev/null; then
+                echo "::error file=$file::bicep lint warning/error in $file"
+                fail=1
+              fi
+            done
           done
-          echo "all bicepparam files compiled clean"
+          if [ "$fail" -ne 0 ]; then exit 1; fi
+          echo "All bicepparam files compiled clean (zero warnings)."
