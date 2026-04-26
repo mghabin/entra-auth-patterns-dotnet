@@ -30,6 +30,7 @@
 # Usage:
 #   ./scripts/provision-apps.sh ENV=dev
 #   IMAGE_TAG=sha-abc1234 ./scripts/provision-apps.sh ENV=dev
+#   LOCATION=westeurope ./scripts/provision-apps.sh ENV=dev   # override region (default: eastus)
 #   WHAT_IF=1 ./scripts/provision-apps.sh ENV=ppe   # preview only; no resource changes
 #
 # Prereqs: bash 4+, az CLI logged in, gh CLI authenticated, jq.
@@ -62,18 +63,28 @@ done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-RG_NAME="rg-ftgo-${ENV}-eastus"
+LOCATION="${LOCATION:-eastus}"
+case "$LOCATION" in
+  eastus)      REGION_SHORT="eus" ;;
+  eastus2)     REGION_SHORT="eus2" ;;
+  westus2)     REGION_SHORT="wus2" ;;
+  westeurope)  REGION_SHORT="weu" ;;
+  northeurope) REGION_SHORT="neu" ;;
+  centralus)   REGION_SHORT="cus" ;;
+  *)           REGION_SHORT="$(echo "${LOCATION:0:3}" | tr '[:upper:]' '[:lower:]')" ;;
+esac
+RG_NAME="rg-ftgo-${ENV}-${LOCATION}"
 TENANT_ID="$(az account show --query tenantId -o tsv)"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 # Container app names mirror the aca-stack.bicep `services` ordering.
-APIGATEWAY_NAME="ftgo-${ENV}-apigateway-eus"
-ORDERS_APP_NAME="ftgo-${ENV}-orders-api-eus"
-RESTAURANTS_APP_NAME="ftgo-${ENV}-restaurants-api-eus"
-KITCHEN_APP_NAME="ftgo-${ENV}-kitchen-worker-eus"
+APIGATEWAY_NAME="ftgo-${ENV}-apigateway-${REGION_SHORT}"
+ORDERS_APP_NAME="ftgo-${ENV}-orders-api-${REGION_SHORT}"
+RESTAURANTS_APP_NAME="ftgo-${ENV}-restaurants-api-${REGION_SHORT}"
+KITCHEN_APP_NAME="ftgo-${ENV}-kitchen-worker-${REGION_SHORT}"
 
 echo "==> tenant   : $TENANT_ID"
-echo "==> env      : $ENV (rg=$RG_NAME)"
+echo "==> env      : $ENV (rg=$RG_NAME, region=$LOCATION)"
 echo "==> imageTag : $IMAGE_TAG"
 
 deploy_azure_bicep() {
@@ -142,7 +153,7 @@ WORKER_MI_JSON=$(jq -nc --arg k "$KITCHEN_MI" '{kitchenWorker: $k}')
 if [[ "${WHAT_IF:-0}" == "1" ]]; then
   echo "    WHAT_IF=1 — preview only, skipping tenant-scope create"
   az deployment tenant what-if \
-    --location eastus \
+    --location "$LOCATION" \
     --template-file "$ROOT/infra/bicep/main.bicep" \
     --parameters "$ROOT/infra/bicep/main.${ENV}.bicepparam" \
     --parameters \
@@ -155,7 +166,7 @@ fi
 
 az deployment tenant create \
   --name "$ENTRA_DEPLOY" \
-  --location eastus \
+  --location "$LOCATION" \
   --template-file "$ROOT/infra/bicep/main.bicep" \
   --parameters "$ROOT/infra/bicep/main.${ENV}.bicepparam" \
   --parameters \
