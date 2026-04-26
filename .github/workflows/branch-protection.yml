@@ -1,9 +1,12 @@
 # Branch protection lives in code, not in the GitHub UI. The committed JSON
-# under .github/branch-protection/ is the source of truth. Apply it by
-# dispatching this workflow; drift is reported by the nightly diff job.
+# under .github/branch-protection/ is the source of truth.
 #
-# Required PAT scope is repo (or admin:repo for protected branches). The
-# default GITHUB_TOKEN is sufficient because the workflow runs in this repo.
+# Auth: branch-protection writes are NOT possible with the default
+# GITHUB_TOKEN — the API requires repo-administration permission, which the
+# automatic token cannot grant. Set a fine-grained PAT (or GitHub App
+# installation token) with "Administration: Read and write" as a repo
+# secret named BRANCH_PROTECTION_TOKEN. The drift job needs the same
+# scope (read) to fetch live config.
 name: branch-protection
 
 on:
@@ -24,18 +27,19 @@ jobs:
   apply:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      administration: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Apply branch protection from JSON
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_TOKEN }}
           BRANCH:  ${{ inputs.branch }}
         run: |
           set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::Secret BRANCH_PROTECTION_TOKEN is not set. See workflow header for required scopes."
+            exit 1
+          fi
           FILE=".github/branch-protection/${BRANCH}.json"
           if [[ ! -f "$FILE" ]]; then
             echo "::error::No protection config found at $FILE"
@@ -50,19 +54,19 @@ jobs:
             --input -
 
   drift:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      administration: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Diff live branch protection vs committed JSON
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_TOKEN }}
         run: |
           set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::Secret BRANCH_PROTECTION_TOKEN is not set; drift job cannot read protection config."
+            exit 1
+          fi
           shopt -s nullglob
           configs=(.github/branch-protection/*.json)
           if [[ ${#configs[@]} -eq 0 ]]; then
@@ -73,21 +77,37 @@ jobs:
           for f in "${configs[@]}"; do
             branch=$(basename "$f" .json)
             echo "::group::Diffing refs/heads/${branch}"
-            expected=$(jq 'del(._comment)' "$f")
-            # Live API returns extra read-only fields; project to the keys we manage.
+            # Project both sides to the same shape, sort contexts so ordering
+            # doesn't cause false drift, and normalize with `jq -S` for diff.
+            expected=$(jq 'del(._comment)
+              | .required_status_checks.contexts |= (. // [] | sort)
+            ' "$f")
             live=$(gh api "repos/${{ github.repository }}/branches/${branch}/protection" 2>/dev/null \
               | jq '{
-                  required_status_checks: (.required_status_checks // null) | if . then {strict: .strict, contexts: .contexts} else null end,
-                  enforce_admins: (.enforce_admins.enabled // false),
-                  required_pull_request_reviews: (.required_pull_request_reviews // null) | if . then {dismiss_stale_reviews, require_code_owner_reviews, required_approving_review_count, require_last_push_approval} else null end,
+                  required_status_checks: (
+                    if .required_status_checks then
+                      {strict: .required_status_checks.strict, contexts: (.required_status_checks.contexts // [] | sort)}
+                    else null end
+                  ),
+                  enforce_admins: ((.enforce_admins.enabled) // false),
+                  required_pull_request_reviews: (
+                    if .required_pull_request_reviews then
+                      {
+                        dismiss_stale_reviews: .required_pull_request_reviews.dismiss_stale_reviews,
+                        require_code_owner_reviews: .required_pull_request_reviews.require_code_owner_reviews,
+                        required_approving_review_count: .required_pull_request_reviews.required_approving_review_count,
+                        require_last_push_approval: .required_pull_request_reviews.require_last_push_approval
+                      }
+                    else null end
+                  ),
                   restrictions: null,
-                  required_linear_history: (.required_linear_history.enabled // false),
-                  allow_force_pushes: (.allow_force_pushes.enabled // false),
-                  allow_deletions: (.allow_deletions.enabled // false),
-                  block_creations: (.block_creations.enabled // false),
-                  required_conversation_resolution: (.required_conversation_resolution.enabled // false),
-                  lock_branch: (.lock_branch.enabled // false),
-                  allow_fork_syncing: (.allow_fork_syncing.enabled // false)
+                  required_linear_history: ((.required_linear_history.enabled) // false),
+                  allow_force_pushes: ((.allow_force_pushes.enabled) // false),
+                  allow_deletions: ((.allow_deletions.enabled) // false),
+                  block_creations: ((.block_creations.enabled) // false),
+                  required_conversation_resolution: ((.required_conversation_resolution.enabled) // false),
+                  lock_branch: ((.lock_branch.enabled) // false),
+                  allow_fork_syncing: ((.allow_fork_syncing.enabled) // false)
                 }')
             expected_norm=$(echo "$expected" | jq -S .)
             live_norm=$(echo "$live"     | jq -S .)

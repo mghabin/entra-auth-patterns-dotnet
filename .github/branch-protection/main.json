@@ -7,7 +7,9 @@
       "bicep-lint",
       "dependency-review",
       "Analyze (csharp)",
-      "Analyze (actions)"
+      "Analyze (actions)",
+      "actionlint",
+      "gitleaks"
     ]
   },
   "enforce_admins": true,
