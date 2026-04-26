@@ -19,6 +19,7 @@ param containerAppsEnvironmentId string
 param image string
 
 @description('Application Insights connection string injected as APPLICATIONINSIGHTS_CONNECTION_STRING.')
+@secure()
 param appInsightsConnectionString string
 
 @description('Logical environment name (dev/ppe/prod). Capitalized into ASPNETCORE_ENVIRONMENT.')
