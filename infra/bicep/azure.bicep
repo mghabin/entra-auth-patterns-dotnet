@@ -38,6 +38,10 @@ param keyVaultSoftDeleteRetentionInDays int = environmentName == 'prod' ? 90 : 7
 @description('Permanently lock the vault against early purge. Required in prod; off in non-prod so the resource can be deleted without waiting out the retention clock. NOTE: irreversible once set to true.')
 param keyVaultEnablePurgeProtection bool = environmentName == 'prod'
 
+@description('Optional Key Vault name override. Empty string (default) → derive deterministically from `uniqueString(resourceGroup().id)`. Set to a one-off name (3-24 chars, alphanumeric + dashes) when recovering from a soft-deleted vault: the deterministic name will collide with the soft-deleted record (especially in prod where purge-protection blocks reuse for the full retention window). Recovery flow: pass a fresh name here, redeploy, then optionally migrate secrets from the recovered/purged vault.')
+@maxLength(24)
+param keyVaultNameOverride string = ''
+
 // Region → short token folded into resource names. Falls back to first 3 chars for unmapped regions.
 var regionShortMap = {
   eastus:       'eus'
@@ -53,7 +57,8 @@ var lawName      = 'ftgo-${environmentName}-law-${regionShort}'
 var aiName       = 'ftgo-${environmentName}-ai-${regionShort}'
 var caeName      = 'ftgo-${environmentName}-cae-${regionShort}'
 // KV global uniqueness: 'kv-ftgo-{env}-{8-char hash of rg.id}' = max 21 chars (within the 24 limit).
-var kvName       = 'kv-ftgo-${environmentName}-${take(uniqueString(resourceGroup().id), 8)}'
+// Override path supports recovery from a soft-deleted vault whose deterministic name is locked out.
+var kvName       = empty(keyVaultNameOverride) ? 'kv-ftgo-${environmentName}-${take(uniqueString(resourceGroup().id), 8)}' : keyVaultNameOverride
 
 module logAnalytics 'modules/log-analytics.bicep' = {
   name:  'law'
