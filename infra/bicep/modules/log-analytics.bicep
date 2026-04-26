@@ -32,6 +32,29 @@ resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   }
 }
 
+// Self-monitor: ship the workspace's own audit log (who queried what) into
+// itself. Audit goes into LAQueryLogs table — useful for "who ran an
+// expensive query" investigations and required for compliance audits.
+resource lawDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name:  'self-audit'
+  scope: law
+  properties: {
+    workspaceId: law.id
+    logs: [
+      {
+        categoryGroup: 'audit'
+        enabled:       true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled:  true
+      }
+    ]
+  }
+}
+
 @description('Resource ID of the workspace (used by App Insights and Container Apps Environment).')
 output workspaceId string = law.id
 
