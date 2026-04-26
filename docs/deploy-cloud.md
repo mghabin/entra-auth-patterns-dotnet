@@ -60,7 +60,7 @@ The workflow auto-deploys to dev. Watch progress under **Actions → CD → depl
 
 ## Provisioning per-env Entra app registrations
 
-The CD identity is intentionally scoped to ARM only (no Microsoft Graph). Entra app regs are provisioned **out-of-band**, once per env, after the first infra deploy:
+The CD identity is intentionally scoped to ARM only (no Microsoft Graph). Entra app regs and the resolved env-var wiring are provisioned **out-of-band**, once per env (or whenever app regs change):
 
 ```bash
 ./scripts/provision-apps.sh ENV=dev
@@ -69,9 +69,14 @@ The CD identity is intentionally scoped to ARM only (no Microsoft Graph). Entra 
 ```
 
 This:
-- Reads the most recent `azure.bicep` deployment outputs (BFF FQDN, ACA principal IDs).
-- Runs `main.bicep` for env-suffixed app regs (`ftgo-dev-apigateway`, ...).
-- Federates each ACA system MI to its corresponding app registration (so services can mint client assertions via MI).
+- Cold-bootstraps `azure.bicep` if no container apps exist yet (`entraConfig={}`).
+- Reads each container app's MI principalId.
+- Runs `main.bicep` to (re-)create env-suffixed app regs (`ftgo-dev-apigateway`, ...) and grant `Orders.Process` to the kitchen-worker MI.
+- Federates the BFF ACA system MI to the BFF app reg (so it can mint client assertions via MI).
+- Re-deploys `azure.bicep` with a populated `entraConfig` object — env vars now live in the bicep state, no more drift.
+- Publishes the resolved `entraConfig` JSON as the `ENTRA_CONFIG_JSON` env-level GitHub variable, so subsequent CD redeploys pass the same wiring back into bicep.
+
+After this runs once per env, every `git push origin main` fully deploys + wires the env automatically — re-running provision-apps is only needed when the Entra app regs themselves change.
 
 ## Promoting to ppe and prod
 

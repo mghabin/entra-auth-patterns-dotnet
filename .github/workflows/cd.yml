@@ -140,9 +140,33 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Resolve entraConfig
+        id: entra
+        env:
+          ENTRA_CONFIG_JSON: ${{ vars.ENTRA_CONFIG_JSON }}
+        run: |
+          set -euo pipefail
+          # ENTRA_CONFIG_JSON is written as a GitHub env-level variable by
+          # `scripts/provision-apps.sh ENV=dev` (manual, one-time per env or when app
+          # regs change). Falls back to `{}` for cold envs where provisioning hasn't
+          # happened yet — the deploy still succeeds, apps come up with appsettings
+          # placeholders, and the operator runs provision-apps.sh once to populate.
+          if [ -z "${ENTRA_CONFIG_JSON}" ]; then
+            echo 'entraConfig={}' >> "$GITHUB_OUTPUT"
+            echo '⚠ ENTRA_CONFIG_JSON unset for env=dev — deploying with empty entraConfig (apps will use appsettings placeholders).' >> "$GITHUB_STEP_SUMMARY"
+          else
+            # Use a heredoc-safe delimiter so multiline JSON survives intact.
+            {
+              echo "entraConfig<<__EOF__"
+              echo "$ENTRA_CONFIG_JSON"
+              echo "__EOF__"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Preview infra changes (what-if — dev)
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          ENTRA_CONFIG: ${{ steps.entra.outputs.entraConfig }}
         run: |
           set -euo pipefail
           {
@@ -153,7 +177,7 @@ jobs:
               --resource-group rg-ftgo-dev-eastus \
               --template-file infra/bicep/azure.bicep \
               --parameters infra/bicep/azure.dev.bicepparam \
-              --parameters imageTag="${IMAGE_TAG}" \
+              --parameters imageTag="${IMAGE_TAG}" entraConfig="${ENTRA_CONFIG}" \
               --result-format FullResourcePayloads \
               --no-pretty-print 2>&1 | tail -200 || true
             echo '```'
@@ -163,6 +187,7 @@ jobs:
         id: deploy
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          ENTRA_CONFIG: ${{ steps.entra.outputs.entraConfig }}
         run: |
           set -euo pipefail
           NAME="ftgo-dev-$(date -u +%Y%m%d%H%M%S)"
@@ -170,7 +195,7 @@ jobs:
             --resource-group rg-ftgo-dev-eastus \
             --template-file infra/bicep/azure.bicep \
             --parameters infra/bicep/azure.dev.bicepparam \
-            --parameters imageTag="${IMAGE_TAG}" \
+            --parameters imageTag="${IMAGE_TAG}" entraConfig="${ENTRA_CONFIG}" \
             --name "$NAME" \
             --only-show-errors \
             --output none
@@ -192,7 +217,7 @@ jobs:
             echo "- Scalar: ${{ steps.deploy.outputs.scalar_url }}"
             echo "- BFF: https://${{ steps.deploy.outputs.apigateway_fqdn }}"
             echo ""
-            echo "_Entra app regs are provisioned out-of-band via_ \`scripts/provision-apps.sh ENV=dev\`."
+            echo "_Entra app regs are provisioned out-of-band via_ \`scripts/provision-apps.sh ENV=dev\`_, which writes the_ \`ENTRA_CONFIG_JSON\` _GitHub env var consumed here._"
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy-ppe:
@@ -234,9 +259,27 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Resolve entraConfig
+        id: entra
+        env:
+          ENTRA_CONFIG_JSON: ${{ vars.ENTRA_CONFIG_JSON }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ENTRA_CONFIG_JSON}" ]; then
+            echo 'entraConfig={}' >> "$GITHUB_OUTPUT"
+            echo '⚠ ENTRA_CONFIG_JSON unset for env=ppe — deploying with empty entraConfig (apps will use appsettings placeholders).' >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "entraConfig<<__EOF__"
+              echo "$ENTRA_CONFIG_JSON"
+              echo "__EOF__"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Preview infra changes (what-if — ppe)
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          ENTRA_CONFIG: ${{ steps.entra.outputs.entraConfig }}
         run: |
           set -euo pipefail
           {
@@ -247,7 +290,7 @@ jobs:
               --resource-group rg-ftgo-ppe-eastus \
               --template-file infra/bicep/azure.bicep \
               --parameters infra/bicep/azure.ppe.bicepparam \
-              --parameters imageTag="${IMAGE_TAG}" \
+              --parameters imageTag="${IMAGE_TAG}" entraConfig="${ENTRA_CONFIG}" \
               --result-format FullResourcePayloads \
               --no-pretty-print 2>&1 | tail -200 || true
             echo '```'
@@ -257,6 +300,7 @@ jobs:
         id: deploy
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          ENTRA_CONFIG: ${{ steps.entra.outputs.entraConfig }}
         run: |
           set -euo pipefail
           NAME="ftgo-ppe-$(date -u +%Y%m%d%H%M%S)"
@@ -264,7 +308,7 @@ jobs:
             --resource-group rg-ftgo-ppe-eastus \
             --template-file infra/bicep/azure.bicep \
             --parameters infra/bicep/azure.ppe.bicepparam \
-            --parameters imageTag="${IMAGE_TAG}" \
+            --parameters imageTag="${IMAGE_TAG}" entraConfig="${ENTRA_CONFIG}" \
             --name "$NAME" \
             --only-show-errors \
             --output none
@@ -325,6 +369,23 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Resolve entraConfig
+        id: entra
+        env:
+          ENTRA_CONFIG_JSON: ${{ vars.ENTRA_CONFIG_JSON }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ENTRA_CONFIG_JSON}" ]; then
+            echo 'entraConfig={}' >> "$GITHUB_OUTPUT"
+            echo '⚠ ENTRA_CONFIG_JSON unset for env=prod — deploying with empty entraConfig (apps will use appsettings placeholders).' >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "entraConfig<<__EOF__"
+              echo "$ENTRA_CONFIG_JSON"
+              echo "__EOF__"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Preview infra changes (what-if — prod)
         # Prod has a required-reviewer protection rule on the GitHub Environment.
         # The what-if output is rendered to the job summary BEFORE the actual
@@ -332,6 +393,7 @@ jobs:
         # in the GitHub UI when deciding whether to approve the deploy.
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          ENTRA_CONFIG: ${{ steps.entra.outputs.entraConfig }}
         run: |
           set -euo pipefail
           {
@@ -344,7 +406,7 @@ jobs:
               --resource-group rg-ftgo-prod-eastus \
               --template-file infra/bicep/azure.bicep \
               --parameters infra/bicep/azure.prod.bicepparam \
-              --parameters imageTag="${IMAGE_TAG}" \
+              --parameters imageTag="${IMAGE_TAG}" entraConfig="${ENTRA_CONFIG}" \
               --result-format FullResourcePayloads \
               --no-pretty-print 2>&1 | tail -200 || true
             echo '```'
@@ -354,6 +416,7 @@ jobs:
         id: deploy
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          ENTRA_CONFIG: ${{ steps.entra.outputs.entraConfig }}
         run: |
           set -euo pipefail
           NAME="ftgo-prod-$(date -u +%Y%m%d%H%M%S)"
@@ -361,7 +424,7 @@ jobs:
             --resource-group rg-ftgo-prod-eastus \
             --template-file infra/bicep/azure.bicep \
             --parameters infra/bicep/azure.prod.bicepparam \
-            --parameters imageTag="${IMAGE_TAG}" \
+            --parameters imageTag="${IMAGE_TAG}" entraConfig="${ENTRA_CONFIG}" \
             --name "$NAME" \
             --only-show-errors \
             --output none

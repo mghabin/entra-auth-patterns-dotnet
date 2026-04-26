@@ -49,7 +49,7 @@ Free-tier Azure Container Apps deployment with **dev → ppe → prod** promotio
 ```bash
 ./scripts/bootstrap-env.sh ENV=dev    # one-time: GH OIDC UAMI + RG + RPs
 git push origin main                  # auto-deploys to dev
-./scripts/provision-apps.sh ENV=dev   # one-time per env: 3 app regs + BFF FIC + MI role grants + env-var wiring
+./scripts/provision-apps.sh ENV=dev   # one-time per env (until app regs change): app regs + BFF FIC + MI grants + ENTRA_CONFIG_JSON GitHub var
 gh workflow run cd.yml -f environment=ppe   # manual promotion to ppe (later, prod)
 ```
 

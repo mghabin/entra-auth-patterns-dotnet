@@ -36,6 +36,9 @@ param memory string = '1.0Gi'
 @description('When false, the app has no public ingress, no HTTP probe, and uses CPU-based scaling. Used for headless worker services.')
 param enableIngress bool = true
 
+@description('Per-env env-var overlay appended to the static container env (ASPNETCORE_*, APPINSIGHTS). Empty on cold deploy; populated by provision-apps.sh after Entra app regs are resolved.')
+param extraEnvVars array = []
+
 var aspNetCoreEnvironment = '${toUpper(substring(environmentName, 0, 1))}${substring(environmentName, 1)}'
 
 resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
@@ -73,7 +76,7 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
             cpu:    json(cpu)
             memory: memory
           }
-          env: [
+          env: concat([
             {
               name:  'ASPNETCORE_ENVIRONMENT'
               value: aspNetCoreEnvironment
@@ -86,7 +89,7 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
               name:  'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsightsConnectionString
             }
-          ]
+          ], extraEnvVars)
           probes: enableIngress ? [
             {
               type: 'Liveness'

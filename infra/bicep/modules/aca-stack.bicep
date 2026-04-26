@@ -25,6 +25,9 @@ param regionShort string
 @description('Tags applied to every container app.')
 param tags object = {}
 
+@description('Resolved Entra wiring (tenantId, app reg appIds, kitchen-worker MI clientId, downstream FQDNs). Empty `{}` on cold deploy → no Entra env vars are injected and apps fall back to appsettings.json placeholders. Populated by scripts/provision-apps.sh after Entra app regs and worker MI are known.')
+param entraConfig object = {}
+
 @description('Service definitions. project = csproj folder name; shortName = lowercase image/name suffix (also used as the Bicep map key); isWebApp = whether to expose HTTP ingress + /health/live + /health/ready probes.')
 param services array = [
   { project: 'Ftgo.ApiGateway',      shortName: 'apigateway',       isWebApp: true  }
@@ -33,7 +36,77 @@ param services array = [
   { project: 'Ftgo.Kitchen.Worker',  shortName: 'kitchen-worker',   isWebApp: false }
 ]
 
-module containerApps 'container-app.bicep' = [for svc in services: {
+// `entraConfig` is treated as all-or-nothing. We require `tenantId` as the marker key
+// because partial population would silently produce broken env vars (e.g. AzureAd:ClientId
+// without AzureAd:TenantId). provision-apps.sh either populates everything or sends `{}`.
+var hasEntra = contains(entraConfig, 'tenantId')
+
+// Microsoft public-client appIds — pre-registered, well-known. Whitelisted ONLY in dev so
+// developer laptops can call dev cloud APIs via DefaultAzureCredential / AzureCliCredential.
+// ppe and prod accept tokens only from real workload identities (BFF + workers).
+//   Azure CLI:          04b07795-8ddb-461a-bbee-02f9e1bf7b46
+//   Visual Studio Code: aebc6443-996d-45c2-90f0-388ff96faa56
+var devPublicClients = environmentName == 'dev' ? [
+  '04b07795-8ddb-461a-bbee-02f9e1bf7b46'
+  'aebc6443-996d-45c2-90f0-388ff96faa56'
+] : []
+
+var apiGatewayEnv = hasEntra ? [
+  { name: 'AzureAd__TenantId',                              value: entraConfig.tenantId }
+  { name: 'AzureAd__ClientId',                              value: entraConfig.bffAppId }
+  { name: 'AzureAd__ClientCredentials__0__SourceType',      value: 'SignedAssertionFromManagedIdentity' }
+  { name: 'DownstreamApis__Orders__BaseUrl',                value: 'https://${entraConfig.ordersApiFqdn}/' }
+  { name: 'DownstreamApis__Orders__Scopes__0',              value: 'api://${entraConfig.ordersApiAppId}/orders.read' }
+  { name: 'DownstreamApis__Orders__AppPermissionScopes__0', value: 'api://${entraConfig.ordersApiAppId}/.default' }
+  { name: 'DownstreamApis__Restaurants__BaseUrl',           value: 'https://${entraConfig.restaurantsApiFqdn}/' }
+  { name: 'DownstreamApis__Restaurants__AppPermissionScopes__0', value: 'api://${entraConfig.restaurantsApiAppId}/.default' }
+] : []
+
+// Build OrdersApi allow-list: BFF first (index 0), then dev public clients (1..N), then
+// kitchen-worker MI clientId (last). Order is stable across envs because dev-only entries
+// only ever appear in dev.
+var ordersApiAllowedClientsBase = hasEntra ? concat(
+  [ entraConfig.bffAppId ],
+  devPublicClients,
+  [ entraConfig.kitchenWorkerMiClientId ]
+) : []
+var ordersApiEnv = hasEntra ? concat([
+  { name: 'AzureAd__TenantId', value: entraConfig.tenantId }
+  { name: 'AzureAd__ClientId', value: entraConfig.ordersApiAppId }
+], map(range(0, length(ordersApiAllowedClientsBase)), i => {
+  name:  'EntraAuth__AllowedClientApps__${i}'
+  value: ordersApiAllowedClientsBase[i]
+})) : []
+
+var restaurantsApiAllowedClientsBase = hasEntra ? concat(
+  [ entraConfig.bffAppId ],
+  devPublicClients
+) : []
+var restaurantsApiEnv = hasEntra ? concat([
+  { name: 'AzureAd__TenantId',                  value: entraConfig.tenantId }
+  { name: 'AzureAd__ClientId',                  value: entraConfig.restaurantsApiAppId }
+  { name: 'EntraAuth__AllowedTenantIds__0',     value: entraConfig.tenantId }
+], map(range(0, length(restaurantsApiAllowedClientsBase)), i => {
+  name:  'EntraAuth__AllowedClientApps__${i}'
+  value: restaurantsApiAllowedClientsBase[i]
+})) : []
+
+// KitchenWorker uses bare MI (no app reg). Just point it at OrdersApi.
+var kitchenWorkerEnv = hasEntra ? [
+  { name: 'Downstream__BaseUrl', value: 'https://${entraConfig.ordersApiFqdn}/' }
+  { name: 'Downstream__Scope',   value: 'api://${entraConfig.ordersApiAppId}/.default' }
+] : []
+
+// Per-service env arrays indexed by `services` ordering. Must match the canonical
+// (apigateway, orders-api, restaurants-api, kitchen-worker) order documented below.
+var serviceEnvs = [
+  apiGatewayEnv
+  ordersApiEnv
+  restaurantsApiEnv
+  kitchenWorkerEnv
+]
+
+module containerApps 'container-app.bicep' = [for (svc, i) in services: {
   name: 'aca-${svc.shortName}'
   params: {
     appName:                     'ftgo-${environmentName}-${svc.shortName}-${regionShort}'
@@ -44,6 +117,7 @@ module containerApps 'container-app.bicep' = [for svc in services: {
     appInsightsConnectionString: appInsightsConnectionString
     environmentName:             environmentName
     enableIngress:               svc.isWebApp
+    extraEnvVars:                serviceEnvs[i]
     tags:                        tags
   }
 }]
