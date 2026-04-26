@@ -14,6 +14,9 @@ param location string
 @description('Tenant id that owns the vault (used to scope RBAC role assignments).')
 param tenantId string
 
+@description('Resource ID of the Log Analytics workspace receiving the vault audit log + AllMetrics.')
+param logAnalyticsWorkspaceId string
+
 @description('Tags applied to the vault.')
 param tags object = {}
 
@@ -36,6 +39,29 @@ resource kv 'Microsoft.KeyVault/vaults@2024-04-01-preview' = {
       defaultAction: 'Allow'
       bypass:        'AzureServices'
     }
+  }
+}
+
+// AuditEvent → Log Analytics. Captures every secret/key/cert read & policy
+// change. Required for any production audit trail; cheap on a dev workload
+// where no secrets are actually read.
+resource kvDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name:  'to-law'
+  scope: kv
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        categoryGroup: 'audit'
+        enabled:       true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled:  true
+      }
+    ]
   }
 }
 

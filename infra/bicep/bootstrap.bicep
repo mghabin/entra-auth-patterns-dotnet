@@ -41,6 +41,8 @@ var tags = {
   environment: environmentName
   workload:    'ftgo'
   managedBy:   'bicep'
+  repo:        '${githubOwner}/${githubRepo}'
+  costCenter:  'sample-${environmentName}'
   purpose:     'cd-bootstrap'
 }
 
