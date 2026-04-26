@@ -25,7 +25,7 @@ param regionShort string
 @description('Tags applied to every container app.')
 param tags object = {}
 
-@description('Service definitions. project = csproj folder name; shortName = lowercase image/name suffix (also used as the Bicep map key); isWebApp = whether to expose HTTP ingress + /health probe.')
+@description('Service definitions. project = csproj folder name; shortName = lowercase image/name suffix (also used as the Bicep map key); isWebApp = whether to expose HTTP ingress + /health/live + /health/ready probes.')
 param services array = [
   { project: 'Ftgo.ApiGateway',      shortName: 'apigateway',       isWebApp: true  }
   { project: 'Ftgo.Orders.Api',      shortName: 'orders-api',       isWebApp: true  }
