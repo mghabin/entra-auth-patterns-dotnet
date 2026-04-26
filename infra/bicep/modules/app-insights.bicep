@@ -29,10 +29,12 @@ resource ai 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-@description('Connection string injected into each container app as APPLICATIONINSIGHTS_CONNECTION_STRING.')
+@description('Connection string injected into each container app as APPLICATIONINSIGHTS_CONNECTION_STRING. Marked @secure() so it does not appear in deployment history (the AccessKey embedded in the connection string grants telemetry ingest).')
+@secure()
 output connectionString string = ai.properties.ConnectionString
 
-@description('Legacy instrumentation key (kept for compatibility; prefer the connection string).')
+@description('Legacy instrumentation key (kept for compatibility; prefer the connection string). Marked @secure() for the same reason.')
+@secure()
 output instrumentationKey string = ai.properties.InstrumentationKey
 
 @description('Resource ID of the AI component.')

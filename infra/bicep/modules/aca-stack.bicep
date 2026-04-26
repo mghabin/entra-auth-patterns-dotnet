@@ -11,6 +11,7 @@ param location string
 param containerAppsEnvironmentId string
 
 @description('Application Insights connection string injected into every app.')
+@secure()
 param appInsightsConnectionString string
 
 @description('Container registry base (e.g. ghcr.io/mghabin). Final image: <registry>/ftgo-<shortName>:<imageTag>.')
