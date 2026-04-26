@@ -29,10 +29,12 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Reset min/max replicas in rg-ftgo-${{ matrix.env }}-eastus
+      - name: Reset min/max replicas in rg-ftgo-${{ matrix.env }}-${{ vars.LOCATION || 'eastus' }}
+        env:
+          LOCATION: ${{ vars.LOCATION || 'eastus' }}
         run: |
           set -euo pipefail
-          RG="rg-ftgo-${{ matrix.env }}-eastus"
+          RG="rg-ftgo-${{ matrix.env }}-${LOCATION}"
           if ! az group show --name "$RG" --only-show-errors --output none 2>/dev/null; then
             echo "Resource group $RG does not exist — skipping."
             exit 0
