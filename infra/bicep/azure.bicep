@@ -30,6 +30,14 @@ param tags object = {
 @description('Resolved Entra wiring (tenantId, app reg appIds, kitchen-worker MI clientId, downstream FQDNs). Empty `{}` on cold deploy → apps fall back to appsettings.json placeholders. Populated by scripts/provision-apps.sh after Entra app regs and worker MI are known.')
 param entraConfig object = {}
 
+@description('Key Vault soft-delete retention in days. Non-prod stays at 7 so churned envs free their globally-unique vault names quickly; prod sits at 90 to align with typical compliance/recovery windows.')
+@minValue(7)
+@maxValue(90)
+param keyVaultSoftDeleteRetentionInDays int = environmentName == 'prod' ? 90 : 7
+
+@description('Permanently lock the vault against early purge. Required in prod; off in non-prod so the resource can be deleted without waiting out the retention clock. NOTE: irreversible once set to true.')
+param keyVaultEnablePurgeProtection bool = environmentName == 'prod'
+
 // Region → short token folded into resource names. Falls back to first 3 chars for unmapped regions.
 var regionShortMap = {
   eastus:       'eus'
@@ -69,11 +77,13 @@ module appInsights 'modules/app-insights.bicep' = {
 module keyVault 'modules/key-vault.bicep' = {
   name:  'kv'
   params: {
-    name:                    kvName
-    location:                location
-    tenantId:                subscription().tenantId
-    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
-    tags:                    tags
+    name:                       kvName
+    location:                   location
+    tenantId:                   subscription().tenantId
+    logAnalyticsWorkspaceId:    logAnalytics.outputs.workspaceId
+    tags:                       tags
+    softDeleteRetentionInDays:  keyVaultSoftDeleteRetentionInDays
+    enablePurgeProtection:      keyVaultEnablePurgeProtection
   }
 }
 

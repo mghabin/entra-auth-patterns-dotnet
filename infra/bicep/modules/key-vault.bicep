@@ -1,5 +1,5 @@
 metadata name = 'key-vault'
-metadata description = 'Standard-SKU Key Vault with RBAC authorization, soft-delete on, 7-day retention. Public network access enabled for ACA reachability.'
+metadata description = 'Standard-SKU Key Vault with RBAC authorization, soft-delete on. Soft-delete retention is parameterized so non-prod can recover quickly (7d) and prod meets compliance windows (90d). Public network access enabled for ACA reachability.'
 
 extension az
 
@@ -20,6 +20,14 @@ param logAnalyticsWorkspaceId string
 @description('Tags applied to the vault.')
 param tags object = {}
 
+@description('Soft-delete retention in days. Microsoft minimum is 7, maximum is 90. Prod should sit at 90 to meet typical audit/recovery windows; non-prod stays at 7 to free names quickly.')
+@minValue(7)
+@maxValue(90)
+param softDeleteRetentionInDays int = 7
+
+@description('When true, the vault cannot be purged before retention expires (irreversible). Required for prod compliance; off in non-prod so churned environments do not pile up undeletable vaults.')
+param enablePurgeProtection bool = false
+
 resource kv 'Microsoft.KeyVault/vaults@2024-04-01-preview' = {
   name:     name
   location: location
@@ -32,8 +40,8 @@ resource kv 'Microsoft.KeyVault/vaults@2024-04-01-preview' = {
     }
     enableRbacAuthorization:   true
     enableSoftDelete:          true
-    softDeleteRetentionInDays: 7
-    enablePurgeProtection:     null
+    softDeleteRetentionInDays: softDeleteRetentionInDays
+    enablePurgeProtection:     enablePurgeProtection ? true : null
     publicNetworkAccess:       'Enabled'
     networkAcls: {
       defaultAction: 'Allow'
