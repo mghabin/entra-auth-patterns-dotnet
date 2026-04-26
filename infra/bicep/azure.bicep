@@ -18,11 +18,13 @@ param imageTag string = 'latest'
 @description('Container registry base. Public images: anonymous pull, no registry credentials needed.')
 param containerRegistry string = 'ghcr.io/mghabin'
 
-@description('Tags applied to every resource.')
+@description('Tags applied to every resource. Defaults include the standard env/workload/managedBy/repo set; callers can override per-deploy.')
 param tags object = {
   environment: environmentName
   workload:    'ftgo'
   managedBy:   'bicep'
+  repo:        'mghabin/entra-auth-patterns-dotnet'
+  costCenter:  'sample-${environmentName}'
 }
 
 @description('Resolved Entra wiring (tenantId, app reg appIds, kitchen-worker MI clientId, downstream FQDNs). Empty `{}` on cold deploy → apps fall back to appsettings.json placeholders. Populated by scripts/provision-apps.sh after Entra app regs and worker MI are known.')
@@ -67,10 +69,11 @@ module appInsights 'modules/app-insights.bicep' = {
 module keyVault 'modules/key-vault.bicep' = {
   name:  'kv'
   params: {
-    name:     kvName
-    location: location
-    tenantId: subscription().tenantId
-    tags:     tags
+    name:                    kvName
+    location:                location
+    tenantId:                subscription().tenantId
+    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
+    tags:                    tags
   }
 }
 
