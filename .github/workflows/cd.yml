@@ -49,6 +49,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -89,12 +90,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push ${{ matrix.project }}
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           push: true
-          provenance: false
+          # SLSA build-provenance attestation — written into the registry alongside the image.
+          # Verifiable with `cosign verify-attestation` or `gh attestation verify`.
+          provenance: mode=max
+          # SBOM in SPDX format, also pushed to the registry.
+          sbom: true
           build-args: |
             PROJECT=${{ matrix.project }}
             BUILD_GIT_SHA=${{ github.sha }}
@@ -105,6 +111,16 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/ftgo-${{ steps.meta.outputs.SHORT_NAME }}:latest
           cache-from: type=gha,scope=ftgo-${{ steps.meta.outputs.SHORT_NAME }}
           cache-to: type=gha,scope=ftgo-${{ steps.meta.outputs.SHORT_NAME }},mode=max
+
+      # Cryptographically signed provenance attestation, pushed to the GitHub
+      # attestation store + Sigstore transparency log. Verifies who built the
+      # image, on which commit, with which workflow.
+      - name: Generate build provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/ftgo-${{ steps.meta.outputs.SHORT_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
   resolve-image-tag:
     # Resolve image tag once and pass it to all downstream env deploys.
