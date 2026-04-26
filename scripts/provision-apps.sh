@@ -122,11 +122,22 @@ deploy_azure_bicep() {
 #    MIs are in place and we can skip the cold azure.bicep deploy. Otherwise do a cold
 #    deploy with entraConfig={} to materialise ACA + MIs.
 echo "==> Detecting deployment state"
+COLD_ENV=0
 if az containerapp show --name "$KITCHEN_APP_NAME" --resource-group "$RG_NAME" --only-show-errors --output none 2>/dev/null; then
   echo "    container apps exist — skipping cold deploy"
 else
+  COLD_ENV=1
   echo "    cold env detected — bootstrapping container apps with empty entraConfig"
   deploy_azure_bicep '{}' 'cold' >/dev/null
+fi
+
+# WHAT_IF=1 + cold env: the tenant-scope main.bicep + the warm wire-back
+# both depend on container-app MIs/FQDNs that don't exist yet. Stop here
+# instead of issuing reads against missing resources.
+if [[ "${WHAT_IF:-0}" == "1" && "$COLD_ENV" == "1" ]]; then
+  echo "    WHAT_IF=1 on cold env — only the cold azure.bicep was previewed."
+  echo "    Re-run WHAT_IF=1 after a real cold deploy to preview the tenant + wire steps."
+  exit 0
 fi
 
 # 2. Read MI principalIds from container apps.
