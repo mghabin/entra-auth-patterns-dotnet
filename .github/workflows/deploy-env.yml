@@ -1,0 +1,198 @@
+# Reusable CD workflow: deploy infra/bicep/azure.bicep to a single environment.
+#
+# Called once per env (dev / ppe / prod) from cd.yml. The caller is responsible
+# for ordering (deploy-dev → deploy-ppe → deploy-prod) and for opting an env
+# in/out via `if:`. This workflow assumes:
+#
+#   - GitHub Environment named ${{ inputs.environment }} exists with vars
+#     AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID, optionally ENTRA_CONFIG_JSON
+#   - Repo-level secret AZURE_TENANT_ID
+#   - infra/bicep/azure.${env}.bicepparam exists
+#   - Resource group rg-ftgo-${env}-eastus follows the standard naming convention
+#
+# Outputs are exposed via workflow_call.outputs so callers can chain them.
+
+name: deploy-env
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Target environment name (dev|ppe|prod). Used for the GitHub Environment, RG name suffix, and bicepparam file.
+        required: true
+        type: string
+      image_tag:
+        description: Container image tag to deploy. Defaults to sha-<short-sha> from the calling commit.
+        required: false
+        type: string
+        default: ''
+      location:
+        description: Azure region (long form, e.g. eastus). Used to derive the RG name.
+        required: false
+        type: string
+        default: eastus
+      region_short:
+        description: Azure region short form (e.g. eus). Used in container app names.
+        required: false
+        type: string
+        default: eus
+    outputs:
+      apigateway_fqdn:
+        description: FQDN of the deployed BFF (API Gateway) container app.
+        value: ${{ jobs.deploy.outputs.apigateway_fqdn }}
+      scalar_url:
+        description: Public URL of the Scalar OpenAPI UI on the BFF.
+        value: ${{ jobs.deploy.outputs.scalar_url }}
+      apigateway_redirect:
+        description: BFF OIDC redirect URI (for app-reg consent verification).
+        value: ${{ jobs.deploy.outputs.apigateway_redirect }}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: cd-deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ENV_NAME: ${{ inputs.environment }}
+      RG: rg-ftgo-${{ inputs.environment }}-${{ inputs.location }}
+      APP: ftgo-${{ inputs.environment }}-apigateway-${{ inputs.region_short }}
+      BICEPPARAM: infra/bicep/azure.${{ inputs.environment }}.bicepparam
+    outputs:
+      apigateway_fqdn: ${{ steps.deploy.outputs.apigateway_fqdn }}
+      scalar_url: ${{ steps.deploy.outputs.scalar_url }}
+      apigateway_redirect: ${{ steps.deploy.outputs.apigateway_redirect }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG}"
+          if [ -z "$TAG" ]; then
+            TAG="sha-${GITHUB_SHA::7}"
+          fi
+          echo "imageTag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve entraConfig (with warm-env guard)
+        id: entra
+        env:
+          ENTRA_CONFIG_JSON: ${{ vars.ENTRA_CONFIG_JSON }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ENTRA_CONFIG_JSON}" ]; then
+            {
+              echo "entraConfig<<__EOF__"
+              echo "$ENTRA_CONFIG_JSON"
+              echo "__EOF__"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # ENTRA_CONFIG_JSON missing. Distinguish a true-cold env (apps don't exist
+          # yet → safe to deploy with `{}`) from a warm env that's already running
+          # with env vars set imperatively by an earlier provision-apps.sh run
+          # (would CLOBBER those env vars and break auth). Only the cold case is
+          # allowed to proceed.
+          if ! az containerapp show --name "$APP" --resource-group "$RG" --only-show-errors --output none 2>/dev/null; then
+            echo "Cold env detected (no $APP container app) — proceeding with entraConfig={}." >&2
+            echo 'entraConfig={}' >> "$GITHUB_OUTPUT"
+            echo "⚠ ENTRA_CONFIG_JSON unset and env=$ENV_NAME is cold — deploying with empty entraConfig. Run \`./scripts/provision-apps.sh ENV=$ENV_NAME\` after the deploy completes to wire Entra config." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          HAS_TENANT=$(az containerapp show --name "$APP" --resource-group "$RG" --query "properties.template.containers[0].env[?name=='AzureAd__TenantId'] | length(@)" -o tsv --only-show-errors)
+          if [ "${HAS_TENANT:-0}" -gt 0 ]; then
+            {
+              echo "ERROR: warm env=$ENV_NAME has live Entra env vars on $APP, but the"
+              echo "       ENTRA_CONFIG_JSON GitHub variable is unset. Deploying now would"
+              echo "       declaratively REMOVE those env vars and break auth."
+              echo ""
+              echo "       Run on a workstation with Owner + gh:"
+              echo "         ./scripts/provision-apps.sh ENV=$ENV_NAME"
+              echo "       (sets the ENTRA_CONFIG_JSON env-level GitHub variable + re-wires)"
+              echo "       then re-run this workflow."
+            } >&2
+            exit 1
+          fi
+          echo "Warm env=$ENV_NAME but no Entra env vars present — proceeding with entraConfig={}." >&2
+          echo 'entraConfig={}' >> "$GITHUB_OUTPUT"
+
+      - name: Preview infra changes (what-if)
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          ENTRA_CONFIG: ${{ steps.entra.outputs.entraConfig }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## ${ENV_NAME} — Bicep what-if preview"
+            echo ""
+            if [ "${ENV_NAME}" = "prod" ]; then
+              echo "_Review the resource changes below before approving the deployment._"
+              echo ""
+            fi
+            echo '```'
+            az deployment group what-if \
+              --resource-group "$RG" \
+              --template-file infra/bicep/azure.bicep \
+              --parameters "$BICEPPARAM" \
+              --parameters imageTag="${IMAGE_TAG}" entraConfig="${ENTRA_CONFIG}" \
+              --result-format FullResourcePayloads \
+              --no-pretty-print 2>&1 | tail -200 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deploy infra (azure.bicep)
+        id: deploy
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          ENTRA_CONFIG: ${{ steps.entra.outputs.entraConfig }}
+        run: |
+          set -euo pipefail
+          NAME="ftgo-${ENV_NAME}-$(date -u +%Y%m%d%H%M%S)"
+          az deployment group create \
+            --resource-group "$RG" \
+            --template-file infra/bicep/azure.bicep \
+            --parameters "$BICEPPARAM" \
+            --parameters imageTag="${IMAGE_TAG}" entraConfig="${ENTRA_CONFIG}" \
+            --name "$NAME" \
+            --only-show-errors \
+            --output none
+          OUTPUTS=$(az deployment group show --resource-group "$RG" --name "$NAME" --query properties.outputs -o json)
+          AGW_FQDN=$(echo "$OUTPUTS" | jq -r '.apiGatewayFqdn.value')
+          SCALAR_URL=$(echo "$OUTPUTS" | jq -r '.scalarUrl.value')
+          AGW_REDIRECT=$(echo "$OUTPUTS" | jq -r '.apiGatewayRedirectUri.value')
+          {
+            echo "apigateway_fqdn=${AGW_FQDN}"
+            echo "scalar_url=${SCALAR_URL}"
+            echo "apigateway_redirect=${AGW_REDIRECT}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.imageTag }}
+          AGW_FQDN: ${{ steps.deploy.outputs.apigateway_fqdn }}
+          SCALAR_URL: ${{ steps.deploy.outputs.scalar_url }}
+        run: |
+          {
+            echo "## ${ENV_NAME} deployed"
+            echo "- Image tag: \`${IMAGE_TAG}\`"
+            echo "- Scalar: ${SCALAR_URL}"
+            echo "- BFF: https://${AGW_FQDN}"
+            echo ""
+            echo "_Entra app regs are provisioned out-of-band via_ \`scripts/provision-apps.sh ENV=${ENV_NAME}\`_, which writes the_ \`ENTRA_CONFIG_JSON\` _GitHub env var consumed here._"
+          } >> "$GITHUB_STEP_SUMMARY"
