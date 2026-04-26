@@ -65,6 +65,9 @@ jobs:
       RG: rg-ftgo-${{ inputs.environment }}-${{ inputs.location }}
       APP: ftgo-${{ inputs.environment }}-apigateway-${{ inputs.region_short }}
       BICEPPARAM: infra/bicep/azure.${{ inputs.environment }}.bicepparam
+      # Consumed by azure.${env}.bicepparam's `readEnvironmentVariable('LOCATION', 'eastus')`
+      # so the bicep `location` param matches the RG suffix derived above.
+      LOCATION: ${{ inputs.location }}
     outputs:
       apigateway_fqdn: ${{ steps.deploy.outputs.apigateway_fqdn }}
       scalar_url: ${{ steps.deploy.outputs.scalar_url }}
