@@ -65,6 +65,7 @@ Costs **$0/mo at idle** (scale-to-zero) and ~$3-5/mo with prod always-on. Full g
 - [Shared auth platform (AKS, multi-product)](docs/aks-shared-infra.md) — when you have N services and M products and want to stop re-implementing auth in every repo.
 - [Sample setup](docs/sample-setup.md) — Entra app registrations, role grants, projects under `src/`.
 - [Run locally (free)](docs/run-locally.md) — bootstrap on just your existing GitHub + Entra tenant.
+- [Operations runbook](docs/operations.md) — environments, what-if previews, branch protection, env teardown, "on fire" troubleshooting.
 
 ### .NET engineering practices applied in `src/`
 
