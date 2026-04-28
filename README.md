@@ -31,6 +31,39 @@ For the cert / FIC-on-GitHub / client-secret patterns, see
 documented but not deployed (those patterns belong outside Azure
 compute or are anti-patterns).
 
+## Architecture
+
+```mermaid
+flowchart LR
+    User([User browser]):::external
+    Entra[("Microsoft Entra ID")]:::entra
+
+    subgraph ACA["Azure Container Apps env (per env: dev / ppe / prod)"]
+        BFF["Ftgo.ApiGateway<br/>(BFF · UAMI + FIC)"]:::svc
+        Orders["Ftgo.Orders.Api<br/>(UAMI · resource API)"]:::svc
+        Restaurants["Ftgo.Restaurants.Api<br/>(UAMI · multi-tenant resource API)"]:::svc
+        Kitchen["Ftgo.Kitchen.Worker<br/>(UAMI · MI direct)"]:::svc
+    end
+
+    User -- "1. OIDC sign-in (Auth Code + PKCE)" --> BFF
+    BFF -. "2. token exchange<br/>(SignedAssertionFromManagedIdentity)" .-> Entra
+    BFF -- "3. OBO access_token<br/>(orders.read)" --> Orders
+    BFF -- "4. app-only access_token<br/>(Restaurants.Read)" --> Restaurants
+    Kitchen -. "5. MI token request" .-> Entra
+    Kitchen -- "6. app-only access_token<br/>(Orders.Process role)" --> Orders
+
+    classDef external fill:#eef,stroke:#669,color:#333
+    classDef entra fill:#fef3c7,stroke:#a16207,color:#92400e
+    classDef svc fill:#e6f7ee,stroke:#2f855a,color:#22543d
+```
+
+Three Entra app registrations per environment (`bff`, `orderservice`,
+`restaurantservice`). Workers don't need their own app reg — their UAMI's
+service principal is granted the resource API's app role directly. Zero
+client secrets, zero certificates: BFF uses **Federated Identity
+Credential** so Entra trusts a Managed-Identity-issued JWT in place of a
+secret; everything else is Managed Identity end-to-end.
+
 ## Quick start
 
 ```bash
