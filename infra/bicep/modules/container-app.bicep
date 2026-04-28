@@ -120,7 +120,15 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
         }
       ]
       scale: {
-        minReplicas: enableIngress ? 0 : 1
+        // Workers (no ingress) historically defaulted to min=1 because there's no HTTP
+        // scaler to wake them on demand. That keeps a vCPU pinned 24/7 (~$2.4/mo per
+        // worker on dev tier) for a probe-once-and-exit pattern. Switching to min=0:
+        // the worker runs once on revision creation/update (executes the probe, exits),
+        // then stays at 0 replicas until the next deploy. CPU-utilization scaler stays
+        // wired so it can scale 0→N if the process ever does sustained work.
+        // Honest cost note: README "$0/mo at idle" is now true for workers too; for a
+        // fully run-on-demand worker, prefer Microsoft.App/jobs over containerApps.
+        minReplicas: 0
         maxReplicas: 3
         rules: enableIngress ? [
           {
