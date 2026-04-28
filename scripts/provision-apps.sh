@@ -11,18 +11,18 @@
 #   1. (cold only) Deploy infra/bicep/azure.bicep with entraConfig={} to create the
 #      Container Apps + system MIs. Skipped when the kitchen-worker container app
 #      already exists.
-#   2. Read each container app's system-assigned MI principalId.
+#   2. Read each container app's system-assigned MI principalId AND resolve the BFF
+#      MI's clientId (subject of the BFF federated credential).
 #   3. Deploy infra/bicep/main.bicep at tenant scope to (re-)create the per-env Entra
-#      app registrations and grant Orders.Process to the kitchen-worker MI's principalId
-#      (Microsoft.Graph extension is idempotent — matches by uniqueName).
+#      app registrations, grant Orders.Process to the kitchen-worker MI's principalId,
+#      AND create the BFF federated identity credential (subject = BFF MI clientId,
+#      audience = api://AzureADTokenExchange) — all declaratively via the Microsoft.Graph
+#      Bicep extension. Idempotent (matches by uniqueName).
 #   4. Resolve the kitchen-worker MI's appId (clientId), used in OrdersApi's
 #      EntraAuth__AllowedClientApps allow-list.
-#   5. Create the federated identity credential on the BFF app reg trusting the BFF's
-#      ACA system MI as a SignedAssertionFromManagedIdentity issuer (BFF's confidential-
-#      client S2S/OBO calls require an app-reg identity).
-#   6. Re-deploy infra/bicep/azure.bicep with a populated entraConfig object. ARM merges
+#   5. Re-deploy infra/bicep/azure.bicep with a populated entraConfig object. ARM merges
 #      the env-var changes into the container app templates declaratively.
-#   7. Publish entraConfig as the ENTRA_CONFIG_JSON env-level GitHub variable so cd.yml
+#   6. Publish entraConfig as the ENTRA_CONFIG_JSON env-level GitHub variable so cd.yml
 #      can re-pass it on subsequent CD redeploys.
 #
 # IMAGE_TAG: optional; defaults to `latest`.
@@ -155,7 +155,11 @@ echo "    orders-api          fqdn=$ORDERS_FQDN"
 echo "    restaurants-api     fqdn=$RESTAURANTS_FQDN"
 echo "    kitchen-worker MI=${KITCHEN_MI:0:8}…"
 
-# 3. Tenant-scope deployment for the per-env app regs + MI role grants.
+# 3. Tenant-scope deployment for the per-env app regs + MI role grants + BFF FIC.
+#    On a cold deploy bffMiClientId='' so the FIC resource short-circuits in Bicep.
+#    On the warm wire-back run (after step 1 created the BFF Container App) we pass
+#    its MI clientId so the FIC is created declaratively in the same deploy as the
+#    app reg. No more split-brain between Bicep + `az ad app federated-credential`.
 echo "==> Deploying main.bicep (env=$ENV)"
 ENTRA_DEPLOY="ftgo-entra-${ENV}-$(date -u +%Y%m%d%H%M%S)"
 AGW_REDIRECT="https://${APIGATEWAY_FQDN}/signin-oidc"
@@ -165,6 +169,12 @@ SCALAR_REDIRECT="https://${APIGATEWAY_FQDN}/scalar/v1"
 export AZURE_TENANT_ID="$TENANT_ID"
 
 WORKER_MI_JSON=$(jq -nc --arg k "$KITCHEN_MI" '{kitchenWorker: $k}')
+
+# Resolve the BFF MI clientId (appId of the apigateway's system-assigned MI service
+# principal). This is the FIC's `subject` claim. APIGATEWAY_MI is the MI's principalId
+# (objectId of the SP) — we need its appId.
+BFF_MI_CLIENT_ID=$(az ad sp show --id "$APIGATEWAY_MI" --query appId -o tsv --only-show-errors)
+echo "    bff MI clientId = $BFF_MI_CLIENT_ID"
 
 if [[ "${WHAT_IF:-0}" == "1" ]]; then
   echo "    WHAT_IF=1 — preview only, skipping tenant-scope create"
@@ -179,6 +189,7 @@ if [[ "${WHAT_IF:-0}" == "1" ]]; then
         apiGatewayRedirectUri="$AGW_REDIRECT" \
         scalarRedirectUri="$SCALAR_REDIRECT" \
         workerMiPrincipalIds="$WORKER_MI_JSON" \
+        bffMiClientId="$BFF_MI_CLIENT_ID" \
     --only-show-errors
   exit 0
 fi
@@ -192,6 +203,7 @@ az deployment tenant create \
       apiGatewayRedirectUri="$AGW_REDIRECT" \
       scalarRedirectUri="$SCALAR_REDIRECT" \
       workerMiPrincipalIds="$WORKER_MI_JSON" \
+      bffMiClientId="$BFF_MI_CLIENT_ID" \
   --only-show-errors --output none
 
 APPS=$(az deployment tenant show --name "$ENTRA_DEPLOY" --query 'properties.outputs.apps.value' -o json --only-show-errors)
@@ -208,37 +220,7 @@ echo "==> Resolving kitchen-worker MI clientId"
 KITCHEN_MI_CLIENT_ID=$(az ad sp show --id "$KITCHEN_MI" --query appId -o tsv --only-show-errors)
 echo "    kitchen-worker clientId = $KITCHEN_MI_CLIENT_ID"
 
-# 5. Federated identity credential on the BFF app reg ← BFF ACA system MI.
-#
-#    SignedAssertionFromManagedIdentity flow: the BFF uses its system-assigned MI to mint
-#    a token with audience `api://AzureADTokenExchange`. The BFF app reg trusts that
-#    token via a federated credential whose issuer is the tenant STS, subject is the MI's
-#    clientId. Then the BFF can do confidential-client S2S/OBO calls under its app-reg
-#    identity without any cert or secret on the box.
-#
-#    Workers (Kitchen) do NOT need this — they call APIs as the MI directly.
-echo "==> Federated identity credential (BFF app reg ← BFF MI)"
-ISSUER="https://login.microsoftonline.com/${TENANT_ID}/v2.0"
-BFF_APP_OBJ_ID=$(az ad app show --id "$BFF_APPID" --query id -o tsv --only-show-errors)
-BFF_MI_CLIENT_ID=$(az ad sp show --id "$APIGATEWAY_MI" --query appId -o tsv --only-show-errors)
-BFF_FIC_NAME="aca-${ENV}-apigateway"
-
-if az ad app federated-credential list --id "$BFF_APP_OBJ_ID" \
-      --query "[?name=='${BFF_FIC_NAME}']" -o tsv --only-show-errors 2>/dev/null | grep -q .; then
-  echo "    FIC '${BFF_FIC_NAME}' already exists"
-else
-  az ad app federated-credential create --id "$BFF_APP_OBJ_ID" --parameters "$(jq -nc \
-    --arg name "$BFF_FIC_NAME" --arg issuer "$ISSUER" --arg sub "$BFF_MI_CLIENT_ID" '{
-      name: $name,
-      issuer: $issuer,
-      subject: $sub,
-      description: "ACA system MI → BFF app reg (SignedAssertionFromManagedIdentity)",
-      audiences: ["api://AzureADTokenExchange"]
-    }')" --only-show-errors --output none
-  echo "    created FIC '${BFF_FIC_NAME}' (subject=${BFF_MI_CLIENT_ID})"
-fi
-
-# 6. Build full entraConfig and re-deploy azure.bicep. This is the step that wires env
+# 5. Build full entraConfig and re-deploy azure.bicep. This is the step that wires env
 #    vars into the container app templates declaratively; subsequent CD redeploys with
 #    the same entraConfig will be no-ops on env vars.
 echo "==> Wiring entraConfig into azure.bicep"
