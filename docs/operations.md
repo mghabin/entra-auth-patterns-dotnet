@@ -33,30 +33,27 @@ Behavior:
   and exits before any side effects (FIC creation, GH variable write,
   wire deploy).
 
-## Branch protection
+## Branch protection (Repository Rulesets)
 
-Source of truth: `.github/branch-protection/main.json`. Apply or diff
-via the `branch-protection` workflow:
+Source of truth: `.github/rulesets/main.json`. Apply or diff via the
+`repo-rulesets` workflow:
 
 ```bash
-# Apply the committed config to refs/heads/main
-gh workflow run branch-protection.yml -f branch=main
+# Apply the committed ruleset to the default branch
+gh workflow run repo-rulesets.yml -f ruleset=main
 
 # Drift report runs nightly; trigger it on demand:
-gh workflow run branch-protection.yml
+gh workflow run repo-rulesets.yml
 ```
 
-The drift job will fail if anyone has changed protection rules in the
+The drift job will fail if anyone has changed ruleset settings in the
 GitHub UI without updating `main.json`.
 
-### One-time setup: BRANCH_PROTECTION_TOKEN secret
-
-The default `GITHUB_TOKEN` cannot manage branch protection — the API
-requires repo-administration permission, which the automatic workflow
-token cannot grant. Provision a fine-grained PAT (or, preferably, a
-GitHub App installation token) with **Administration: Read and write**
-scope on this repo, then store it as the repo secret
-`BRANCH_PROTECTION_TOKEN`. The apply and drift jobs both need it.
+The default `GITHUB_TOKEN` is sufficient — the workflow declares
+`administration: write` permission so no separate PAT is needed.
+(This replaced the legacy classic-branch-protection setup, which
+required a fine-grained `BRANCH_PROTECTION_TOKEN` PAT because the
+classic API doesn't accept the workflow token.)
 
 Until that secret is set, the nightly drift cron will fail with a
 clear error. Tracked in issue #67.
@@ -129,9 +126,9 @@ az containerapp logs show \
 * **CD smoke-test fails after a successful deploy** — check container
   app logs (above); 180s should be enough for cold-start, but image
   pull from a new registry can be slower.
-* **Branch protection drift alert** — open `.github/branch-protection/main.json`,
+* **Ruleset drift alert** — open `.github/rulesets/main.json`,
   reconcile against the failure diff in the workflow log, commit a fix,
-  then re-run `branch-protection.yml` to apply.
+  then re-run `repo-rulesets.yml` to apply.
 * **CD `build-images` fails with Trivy CRITICAL/HIGH** — open the SARIF
   upload in the Security tab to see the CVE list. Fix order:
   bump the base image (Dockerfile FROM tag) and let Dependabot's
