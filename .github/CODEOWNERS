@@ -8,15 +8,18 @@
 
 # Infrastructure-as-code (Bicep + bootstrap scripts) — handle with extra care
 # because changes ripple across every environment.
-/infra/                 @mghabin
-/scripts/               @mghabin
-/.github/workflows/     @mghabin
-/.github/dependabot.yml @mghabin
-/.github/CODEOWNERS     @mghabin
+/infra/                       @mghabin
+/scripts/                     @mghabin
+/.github/workflows/           @mghabin
+/.github/dependabot.yml       @mghabin
+/.github/CODEOWNERS           @mghabin
+/.github/branch-protection/   @mghabin
+/.gitleaks.toml               @mghabin
 
 # Auth/identity surface — every change here is a potential security event.
 /src/Ftgo.Auth/         @mghabin
 /docs/credential-patterns/ @mghabin
+/docs/operations.md     @mghabin
 /SECURITY.md            @mghabin
 
 # Engineering-guide-style root config files — TreatWarningsAsErrors and lock
