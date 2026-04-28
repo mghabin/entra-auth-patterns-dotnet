@@ -135,8 +135,11 @@ fi
 # both depend on container-app MIs/FQDNs that don't exist yet. Stop here
 # instead of issuing reads against missing resources.
 if [[ "${WHAT_IF:-0}" == "1" && "$COLD_ENV" == "1" ]]; then
-  echo "    WHAT_IF=1 on cold env — only the cold azure.bicep was previewed."
-  echo "    Re-run WHAT_IF=1 after a real cold deploy to preview the tenant + wire steps."
+  echo "    WHAT_IF=1 on cold env — only step 1 of 3 (cold azure.bicep) was previewed."
+  echo "    Steps NOT previewed (depend on resources that don't exist yet):"
+  echo "      - main.bicep (tenant-scope app regs + role grants)"
+  echo "      - azure.bicep wire-back (container apps with entraConfig wired in)"
+  echo "    Re-run WHAT_IF=1 after a real cold deploy to preview the remaining steps."
   exit 0
 fi
 
@@ -165,6 +168,9 @@ WORKER_MI_JSON=$(jq -nc --arg k "$KITCHEN_MI" '{kitchenWorker: $k}')
 
 if [[ "${WHAT_IF:-0}" == "1" ]]; then
   echo "    WHAT_IF=1 — preview only, skipping tenant-scope create"
+  echo "    NOTE: this previews step 2 of 3 (tenant main.bicep). The final wire-back"
+  echo "          azure.bicep deploy (step 3) is NOT previewed because it depends on"
+  echo "          tenant outputs (app reg appIds) that only exist after a real run."
   az deployment tenant what-if \
     --location "$LOCATION" \
     --template-file "$ROOT/infra/bicep/main.bicep" \
