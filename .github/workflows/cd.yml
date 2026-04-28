@@ -62,7 +62,7 @@ jobs:
     outputs:
       imageTag: ${{ steps.meta.outputs.imageTag }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Compute image metadata
         id: meta
@@ -82,9 +82,9 @@ jobs:
             echo "imageTag=sha-${SHORT_SHA}"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -92,7 +92,7 @@ jobs:
 
       - name: Build & push ${{ matrix.project }}
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
         with:
           context: .
           file: Dockerfile
@@ -117,7 +117,7 @@ jobs:
       # attestation store + Sigstore transparency log. Verifies who built the
       # image, on which commit, with which workflow.
       - name: Generate build provenance attestation
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@b3e506e8c389afc651c5bacf2b8f2a1ea0557215 # v4
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/ftgo-${{ steps.meta.outputs.SHORT_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -140,7 +140,7 @@ jobs:
 
       - name: Upload Trivy SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@b25d0ebf40e5b63ee81e1bd6e5d2a12b7c2aeb61 # v4
         with:
           sarif_file: trivy-${{ steps.meta.outputs.SHORT_NAME }}.sarif
           category: trivy-${{ steps.meta.outputs.SHORT_NAME }}
