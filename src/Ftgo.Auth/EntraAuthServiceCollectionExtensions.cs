@@ -39,6 +39,13 @@ public static class EntraAuthServiceCollectionExtensions
 
         services.AddAuthorization(o =>
         {
+            // Deny-by-default: every endpoint requires an authenticated user unless it
+            // explicitly opts out with [AllowAnonymous] (e.g. health probes, OpenAPI doc,
+            // Scalar UI in dev). Eng-guide SECURITY/must.
+            o.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+
             o.AddPolicy(ClientAppPolicy.Name, p =>
             {
                 p.RequireAuthenticatedUser();

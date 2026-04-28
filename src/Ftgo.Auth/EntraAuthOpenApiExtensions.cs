@@ -62,7 +62,10 @@ public static class EntraAuthOpenApiExtensions
         string scopeName)
     {
         var clientId = configuration["AzureAd:ClientId"]!;
-        endpoints.MapOpenApi();
+        // OpenAPI doc + Scalar UI are documentation surfaces; FallbackPolicy would otherwise
+        // make them require auth. Mark anonymous so the "browse to /scalar/v1" demo flow
+        // works. The protected-by-Entra resources still require a token before any operation.
+        endpoints.MapOpenApi().AllowAnonymous();
         endpoints.MapScalarApiReference(opt =>
         {
             opt.AddPreferredSecuritySchemes("entra")
@@ -72,7 +75,7 @@ public static class EntraAuthOpenApiExtensions
                    flow.Pkce = Pkce.Sha256;
                    flow.SelectedScopes = [$"api://{clientId}/{scopeName}"];
                });
-        });
+        }).AllowAnonymous();
         return endpoints;
     }
 }
