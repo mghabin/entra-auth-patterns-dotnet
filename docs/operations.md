@@ -33,33 +33,32 @@ Behavior:
   and exits before any side effects (FIC creation, GH variable write,
   wire deploy).
 
-## Branch protection
+## Branch protection (Repository Rulesets)
 
-Source of truth: `.github/branch-protection/main.json`. Apply or diff
-via the `branch-protection` workflow:
+Source of truth: `.github/rulesets/main.json`. The `repo-rulesets` workflow runs **drift detection only** (nightly + on PRs that touch `.github/rulesets/`). The default `GITHUB_TOKEN` has read access to rulesets, so no PAT is required for drift.
+
+Applying changes is a manual maintainer action — repository administration isn't exposed as a workflow permission scope, so an "apply" job would need an admin PAT or GitHub App and we keep CI free of admin secrets:
 
 ```bash
-# Apply the committed config to refs/heads/main
-gh workflow run branch-protection.yml -f branch=main
+REPO=mghabin/entra-auth-patterns-dotnet
+NAME=$(jq -r .name .github/rulesets/main.json)
+ID=$(gh api "repos/$REPO/rulesets" --jq ".[]|select(.name==\"$NAME\")|.id")
 
-# Drift report runs nightly; trigger it on demand:
-gh workflow run branch-protection.yml
+# Update existing ruleset
+jq 'del(._comment)' .github/rulesets/main.json \
+  | gh api -X PUT "repos/$REPO/rulesets/$ID" --input -
+
+# Or create new (first time only)
+jq 'del(._comment)' .github/rulesets/main.json \
+  | gh api -X POST "repos/$REPO/rulesets" --input -
+
+# Drift report on demand
+gh workflow run repo-rulesets.yml
 ```
 
-The drift job will fail if anyone has changed protection rules in the
-GitHub UI without updating `main.json`.
+The drift job fails if anyone changes ruleset settings in the GitHub UI without updating `main.json`.
 
-### One-time setup: BRANCH_PROTECTION_TOKEN secret
-
-The default `GITHUB_TOKEN` cannot manage branch protection — the API
-requires repo-administration permission, which the automatic workflow
-token cannot grant. Provision a fine-grained PAT (or, preferably, a
-GitHub App installation token) with **Administration: Read and write**
-scope on this repo, then store it as the repo secret
-`BRANCH_PROTECTION_TOKEN`. The apply and drift jobs both need it.
-
-Until that secret is set, the nightly drift cron will fail with a
-clear error. Tracked in issue #67.
+(This replaced the legacy classic-branch-protection setup, which required a fine-grained `BRANCH_PROTECTION_TOKEN` PAT in CI for the apply step. The new setup needs no CI secrets at all.)
 
 ## Nightly cost-safety
 
@@ -129,9 +128,10 @@ az containerapp logs show \
 * **CD smoke-test fails after a successful deploy** — check container
   app logs (above); 180s should be enough for cold-start, but image
   pull from a new registry can be slower.
-* **Branch protection drift alert** — open `.github/branch-protection/main.json`,
+* **Ruleset drift alert** — open `.github/rulesets/main.json`,
   reconcile against the failure diff in the workflow log, commit a fix,
-  then re-run `branch-protection.yml` to apply.
+  then apply manually using the `gh api` snippet in the
+  "Branch protection (Repository Rulesets)" section above.
 * **CD `build-images` fails with Trivy CRITICAL/HIGH** — open the SARIF
   upload in the Security tab to see the CVE list. Fix order:
   bump the base image (Dockerfile FROM tag) and let Dependabot's
