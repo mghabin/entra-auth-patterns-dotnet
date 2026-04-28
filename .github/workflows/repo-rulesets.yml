@@ -53,12 +53,16 @@ jobs:
           # Strip API-only fields that the server adds on read so they don't
           # show up as drift. Everything else is part of the user-authored shape.
           STRIP='del(.id, .source_type, .source, .node_id, .created_at, .updated_at, .current_user_can_bypass, ._links, .links)'
+          # Optional fields that the API may or may not return when empty.
+          # Normalize both sides to "field absent if empty" so they compare
+          # equal regardless of which shape the API happens to use.
+          NORMALIZE='if .bypass_actors == [] then del(.bypass_actors) else . end'
 
           drift=0
           for f in "${configs[@]}"; do
             name=$(jq -r '.name' "$f")
             echo "::group::Diffing ruleset '${name}'"
-            expected=$(jq "del(._comment) | ${STRIP}" "$f" | jq -S .)
+            expected=$(jq "del(._comment) | ${STRIP} | ${NORMALIZE}" "$f" | jq -S .)
 
             id=$(gh api "repos/${REPO}/rulesets" --jq ".[] | select(.name==\"${name}\") | .id" | head -1)
             if [[ -z "$id" ]]; then
@@ -68,7 +72,7 @@ jobs:
               continue
             fi
 
-            live=$(gh api "repos/${REPO}/rulesets/${id}" | jq "${STRIP}" | jq -S .)
+            live=$(gh api "repos/${REPO}/rulesets/${id}" | jq "${STRIP} | ${NORMALIZE}" | jq -S .)
 
             if [[ "$expected" != "$live" ]]; then
               drift=1
