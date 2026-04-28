@@ -22,6 +22,12 @@ param apiGatewayRedirectUri string
 @description('SPA redirect URI registered on the BFF for Scalar PKCE callback.')
 param scalarRedirectUri string
 
+@description('clientId (appId) of the BFF Container App\'s system-assigned MI. Used as the subject of the BFF federated identity credential. Empty string on cold deploy (the BFF MI does not yet exist) — the FIC is then skipped and provision-apps.sh re-runs the tenant deployment with this populated.')
+param bffMiClientId string = ''
+
+@description('Name of the BFF federated identity credential. Conventionally aca-{env}-apigateway. Ignored when bffMiClientId is empty.')
+param bffFicName string = ''
+
 var ordersReadScopeId        = guid(tenantId, '${prefix}-orders-api',      'orders.read')
 var ordersProcessRoleId      = guid(tenantId, '${prefix}-orders-api',      'Orders.Process')
 var restaurantsReadRoleId    = guid(tenantId, '${prefix}-restaurants-api', 'Restaurants.Read.All')
@@ -60,6 +66,24 @@ resource apiGateway 'Microsoft.Graph/applications@v1.0' = {
 
 resource apiGatewaySp 'Microsoft.Graph/servicePrincipals@v1.0' = {
   appId: apiGateway.appId
+}
+
+// Federated identity credential on the BFF app reg trusting the BFF Container App's
+// system-assigned MI. The BFF mints a token with audience `api://AzureADTokenExchange`
+// using its system MI; the FIC tells Entra to accept that token as proof that the
+// caller IS the BFF app reg, enabling SignedAssertionFromManagedIdentity for OBO/S2S
+// without certs or secrets on the box.
+//
+// Skipped on cold deploy (bffMiClientId == '' because the Container App + its MI do
+// not yet exist). provision-apps.sh re-runs this template once azure.bicep has been
+// deployed and the MI clientId is known.
+resource apiGatewayFic 'Microsoft.Graph/applications/federatedIdentityCredentials@v1.0' = if (!empty(bffMiClientId)) {
+  name:        '${apiGateway.uniqueName}/${bffFicName}'
+  audiences:   [ 'api://AzureADTokenExchange' ]
+  description: 'ACA system MI → BFF app reg (SignedAssertionFromManagedIdentity)'
+  #disable-next-line no-hardcoded-env-urls
+  issuer:      'https://login.microsoftonline.com/${tenantId}/v2.0'
+  subject:     bffMiClientId
 }
 
 resource ordersApi 'Microsoft.Graph/applications@v1.0' = {
