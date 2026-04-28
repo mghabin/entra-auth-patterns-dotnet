@@ -28,11 +28,16 @@ param environmentName string
 @description('Tags applied to the container app.')
 param tags object = {}
 
-@description('CPU cores per replica.')
-param cpu string = '0.5'
+@description('CPU cores per replica. Default 0.25 keeps dev cost-bounded; bump to 0.5+ for ppe/prod via parameter override.')
+param cpu string = '0.25'
 
-@description('Memory per replica.')
-param memory string = '1.0Gi'
+@description('Memory per replica. Default 0.5Gi keeps dev cost-bounded; bump to 1.0Gi+ for ppe/prod via parameter override.')
+param memory string = '0.5Gi'
+
+@description('Maximum replicas the HTTP/CPU scaler is allowed to spin up. Default 1 caps dev at a known-tiny worst case (4 apps × 1 replica × 0.25 vCPU ≈ \$16/mo if pinned 24/7); ppe/prod should override.')
+@minValue(1)
+@maxValue(30)
+param maxReplicas int = 1
 
 @description('When false, the app has no public ingress, no HTTP probe, and uses CPU-based scaling. Used for headless worker services.')
 param enableIngress bool = true
@@ -129,7 +134,7 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
         // Honest cost note: README "$0/mo at idle" is now true for workers too; for a
         // fully run-on-demand worker, prefer Microsoft.App/jobs over containerApps.
         minReplicas: 0
-        maxReplicas: 3
+        maxReplicas: maxReplicas
         rules: enableIngress ? [
           {
             name: 'http-concurrency'
