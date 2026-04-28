@@ -52,7 +52,7 @@ done
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GH_OWNER="${GH_OWNER:-$(gh repo view --json owner --jq .owner.login)}"
 GH_REPO="${GH_REPO:-$(gh repo view --json name --jq .name)}"
-LOCATION="${LOCATION:-eastus}"
+export LOCATION="${LOCATION:-eastus}"
 ACCOUNT_JSON="$(az account show -o json)"
 TENANT_ID=$(jq -r .tenantId <<<"$ACCOUNT_JSON")
 SUB_ID=$(jq    -r .id       <<<"$ACCOUNT_JSON")
