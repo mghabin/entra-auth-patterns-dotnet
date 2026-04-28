@@ -29,7 +29,11 @@ param scalarRedirectUri string = 'https://localhost:7101/scalar/v1'
 @description('Map of worker MI key → principalId (system MI of the corresponding ACA app). Passed in by provision-apps.sh after reading azure.bicep outputs. Empty during a cold deploy — the script re-runs the tenant deploy with this populated once the ACA stack exists.')
 param workerMiPrincipalIds object = {}
 
+@description('clientId (appId) of the BFF Container App\'s system-assigned MI. Used as the subject of the BFF federated identity credential. Empty on cold deploy; populated on the warm wire-back run by provision-apps.sh.')
+param bffMiClientId string = ''
+
 var effectivePrefix = '${prefix}-${environmentName}'
+var bffFicName      = 'aca-${environmentName}-apigateway'
 
 module appRegistrations 'modules/app-registrations.bicep' = {
   name: 'app-registrations'
@@ -38,6 +42,8 @@ module appRegistrations 'modules/app-registrations.bicep' = {
     prefix:                effectivePrefix
     apiGatewayRedirectUri: apiGatewayRedirectUri
     scalarRedirectUri:     scalarRedirectUri
+    bffMiClientId:         bffMiClientId
+    bffFicName:            bffFicName
   }
 }
 
