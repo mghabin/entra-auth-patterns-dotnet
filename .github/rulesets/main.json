@@ -1,9 +1,8 @@
 {
-  "_comment": "Declarative GitHub Repository Ruleset for the default branch (main). Apply via the repo-rulesets workflow (manual dispatch). This file is the source of truth — drift means update the file + re-apply, not click in the UI. Replaces the legacy classic-branch-protection JSON; rulesets are the modern API and work with the default GITHUB_TOKEN (no PAT required).",
+  "_comment": "Declarative GitHub Repository Ruleset for the default branch (main). Apply manually with `gh api -X PUT /repos/{owner}/{repo}/rulesets/{id}` (snippet in docs/operations.md). Drift detection runs in CI. Replaces the legacy classic-branch-protection JSON; rulesets are the modern API and have a much simpler drift-comparison surface.",
   "name": "main-branch-protection",
   "target": "branch",
   "enforcement": "active",
-  "bypass_actors": [],
   "conditions": {
     "ref_name": {
       "include": ["~DEFAULT_BRANCH"],
