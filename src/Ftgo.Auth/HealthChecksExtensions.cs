@@ -26,12 +26,12 @@ public static class HealthChecksExtensions
         endpoints.MapHealthChecks("/health/live", new HealthCheckOptions
         {
             Predicate = static _ => false,
-        });
+        }).AllowAnonymous();
 
         endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
             Predicate = static check => check.Tags.Contains("ready"),
-        });
+        }).AllowAnonymous();
 
         return endpoints;
     }
