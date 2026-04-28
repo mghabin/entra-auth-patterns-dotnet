@@ -1,72 +1,39 @@
-# GitHub Repository Rulesets — successor to classic branch-protection.
+# GitHub Repository Rulesets — drift detection only.
 #
-# Why rulesets over classic branch protection:
-#   * Modern GitHub API (the classic /branches/{branch}/protection endpoint is in
-#     soft-deprecation; rulesets are the documented forward path).
-#   * Work with the default GITHUB_TOKEN (when granted `administration: write`),
-#     so no fine-grained PAT to provision/rotate (was BRANCH_PROTECTION_TOKEN).
-#   * Ruleset JSON shape matches the API response, so drift detection is a
-#     trivial deep-equal instead of a 30-line jq projection.
+# Why drift-only and not auto-apply:
+#   The default GITHUB_TOKEN cannot manage repository administration
+#   (`administration` is not exposed as a workflow permission scope), so
+#   any "apply ruleset" job would need an admin PAT or GitHub App. We
+#   prefer keeping CI free of admin secrets and applying changes via a
+#   maintainer's local `gh` session (see README/operations.md).
+#
+# Read access (GET /repos/{owner}/{repo}/rulesets) does work with the
+# default token, which is all we need to detect drift.
 #
 # Source of truth: .github/rulesets/*.json (one ruleset per file).
+# Apply manually:
+#   ID=$(gh api repos/$REPO/rulesets --jq '.[]|select(.name=="NAME")|.id')
+#   jq 'del(._comment)' .github/rulesets/main.json \
+#     | gh api -X PUT repos/$REPO/rulesets/$ID --input -
 
 name: repo-rulesets
 
 on:
-  workflow_dispatch:
-    inputs:
-      ruleset:
-        description: 'Ruleset filename under .github/rulesets/ (without .json) to apply'
-        type: string
-        default: main
+  workflow_dispatch: {}
   schedule:
-    # Daily drift report at 04:00 UTC. Read-only; never auto-applies.
+    # Daily drift report at 04:00 UTC.
     - cron: '0 4 * * *'
+  pull_request:
+    paths:
+      - '.github/rulesets/**'
+      - '.github/workflows/repo-rulesets.yml'
 
 permissions:
   contents: read
-  # `administration: write` is required to upsert rulesets via /repos/{owner}/{repo}/rulesets.
-  # The drift job downgrades to `administration: read` at job-level scope.
-  administration: write
 
 jobs:
-  apply:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Upsert ruleset
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          RULESET: ${{ inputs.ruleset }}
-        run: |
-          set -euo pipefail
-          FILE=".github/rulesets/${RULESET}.json"
-          if [[ ! -f "$FILE" ]]; then
-            echo "::error::No ruleset found at $FILE"
-            exit 1
-          fi
-          PAYLOAD=$(jq 'del(._comment)' "$FILE")
-          NAME=$(jq -r '.name' <<<"$PAYLOAD")
-
-          echo "Looking up existing ruleset by name '${NAME}'…"
-          ID=$(gh api "repos/${REPO}/rulesets" --jq ".[] | select(.name==\"${NAME}\") | .id" | head -1)
-
-          if [[ -n "$ID" ]]; then
-            echo "Updating ruleset id=${ID}"
-            echo "$PAYLOAD" | gh api -X PUT "repos/${REPO}/rulesets/${ID}" --input -
-          else
-            echo "Creating new ruleset"
-            echo "$PAYLOAD" | gh api -X POST "repos/${REPO}/rulesets" --input -
-          fi
-
   drift:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      administration: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -83,25 +50,25 @@ jobs:
             exit 0
           fi
 
-          # Strip API-only fields that the server adds on read so they don't show
-          # up as drift. Everything else is part of the user-authored shape.
-          STRIP_FIELDS='del(.id, .source_type, .source, .node_id, .created_at, .updated_at, .current_user_can_bypass, ._links, .links)'
+          # Strip API-only fields that the server adds on read so they don't
+          # show up as drift. Everything else is part of the user-authored shape.
+          STRIP='del(.id, .source_type, .source, .node_id, .created_at, .updated_at, .current_user_can_bypass, ._links, .links)'
 
           drift=0
           for f in "${configs[@]}"; do
             name=$(jq -r '.name' "$f")
             echo "::group::Diffing ruleset '${name}'"
-            expected=$(jq "del(._comment) | ${STRIP_FIELDS}" "$f" | jq -S .)
+            expected=$(jq "del(._comment) | ${STRIP}" "$f" | jq -S .)
 
             id=$(gh api "repos/${REPO}/rulesets" --jq ".[] | select(.name==\"${name}\") | .id" | head -1)
             if [[ -z "$id" ]]; then
-              echo "::warning::Ruleset '${name}' is not provisioned on the repo"
+              echo "::warning::Ruleset '${name}' is not provisioned on the repo. Apply it manually with the snippet in repo-rulesets.yml header."
               drift=1
               echo "::endgroup::"
               continue
             fi
 
-            live=$(gh api "repos/${REPO}/rulesets/${id}" | jq "${STRIP_FIELDS}" | jq -S .)
+            live=$(gh api "repos/${REPO}/rulesets/${id}" | jq "${STRIP}" | jq -S .)
 
             if [[ "$expected" != "$live" ]]; then
               drift=1
@@ -114,6 +81,6 @@ jobs:
           done
 
           if [[ $drift -eq 1 ]]; then
-            echo "::error::Drift detected — re-run the apply job (workflow_dispatch) to reconcile."
+            echo "::error::Drift detected — apply manually (see header of this workflow file)."
             exit 1
           fi
