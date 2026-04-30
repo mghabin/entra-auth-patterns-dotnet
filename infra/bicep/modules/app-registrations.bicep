@@ -1,6 +1,19 @@
 metadata name = 'app-registrations'
 metadata description = 'Provisions the 3 FTGO Entra app registrations + service principals (BFF, Orders API, Restaurants API) and exposes deterministic scope/role IDs. Workers run as Managed Identity and do not need their own app reg.'
 
+// IMPORTANT: bffMiClientId must NEVER be passed as empty on a re-run after the
+// initial warm deploy. The FIC resource depends on this value as its 'subject'.
+// If you re-run with an empty bffMiClientId, the FIC will be deleted, causing
+// the BFF to lose its trust relationship with the BFF UAMI. The bootstrap
+// flow (scripts/provision-apps.sh) must always pass the populated value.
+//
+// Cold-deploy semantics (bffMiClientId == '') are intentional and safe ONLY
+// before the BFF Container App + its system-assigned MI exist. Once the FIC
+// has been created, every subsequent tenant-scope deploy MUST resolve and
+// pass the BFF MI clientId or the Microsoft.Graph extension will reconcile
+// the FIC out of existence and break SignedAssertionFromManagedIdentity for
+// the BFF until the next provision-apps.sh run.
+
 // Scope/role IDs are deterministic GUIDs of (tenantId, app, value) so callers' references survive re-deploys.
 
 extension graphV1
@@ -81,6 +94,9 @@ resource apiGatewayFic 'Microsoft.Graph/applications/federatedIdentityCredential
   name:        '${apiGateway.uniqueName}/${bffFicName}'
   audiences:   [ 'api://AzureADTokenExchange' ]
   description: 'ACA system MI → BFF app reg (SignedAssertionFromManagedIdentity)'
+  // Microsoft Entra v2.0 token endpoint issuer. This is THE canonical issuer
+  // for FIC trust on Microsoft Entra ID; suppressing no-hardcoded-env-urls is
+  // intentional. Reference: https://learn.microsoft.com/entra/workload-id/workload-identity-federation
   #disable-next-line no-hardcoded-env-urls
   issuer:      'https://login.microsoftonline.com/${tenantId}/v2.0'
   subject:     bffMiClientId
