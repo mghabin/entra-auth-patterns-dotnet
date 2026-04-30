@@ -118,6 +118,20 @@ module acaStack 'modules/aca-stack.bicep' = {
     entraConfig:                 entraConfig
     tags:                        tags
   }
+  // Implicit dependencies via `appInsights.outputs.connectionString` (and the
+  // downstream `kvRbac` consumption of `keyVault`) are technically sufficient,
+  // but mghabin/infra-engineering-guide ch02 §3 ("explicit, reviewable
+  // composition") favours making cross-module ordering visible at the call
+  // site — it survives refactors that drop an output reference and keeps the
+  // dependency graph greppable. keyVault is listed here even though no output
+  // is consumed by acaStack so the apps never start before the secret store
+  // they will eventually be granted RBAC on exists. appInsights is listed
+  // alongside it to keep the pair symmetric and self-documenting; the
+  // no-unnecessary-dependson lint correctly flags it as redundant given the
+  // existing connectionString reference, but the explicit listing is the
+  // intended documentation.
+  #disable-next-line no-unnecessary-dependson
+  dependsOn: [ keyVault, appInsights ]
 }
 
 module kvRbac 'modules/key-vault-rbac.bicep' = {

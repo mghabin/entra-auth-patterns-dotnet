@@ -173,6 +173,17 @@ WORKER_MI_JSON=$(jq -nc --arg k "$KITCHEN_MI" '{kitchenWorker: $k}')
 # Resolve the BFF MI clientId (appId of the apigateway's system-assigned MI service
 # principal). This is the FIC's `subject` claim. APIGATEWAY_MI is the MI's principalId
 # (objectId of the SP) — we need its appId.
+#
+# IMPORTANT: BFF_MI_CLIENT_ID must NEVER be passed as empty on a re-run after the
+# initial warm deploy. The FIC resource in modules/app-registrations.bicep depends
+# on this value as its 'subject'. If main.bicep is re-deployed with bffMiClientId=''
+# after the FIC has been created, the Microsoft.Graph extension will delete it,
+# causing the BFF to lose its trust relationship with its UAMI and break
+# SignedAssertionFromManagedIdentity for OBO/S2S until this script runs again.
+# The empty-string path is intentional ONLY on cold deploy (before APIGATEWAY_MI
+# resolves), and that path is not reached here because we already short-circuit
+# WHAT_IF on cold-env above; by the time we hit this line, APIGATEWAY_MI is set
+# and `az ad sp show` must succeed.
 BFF_MI_CLIENT_ID=$(az ad sp show --id "$APIGATEWAY_MI" --query appId -o tsv --only-show-errors)
 echo "    bff MI clientId = $BFF_MI_CLIENT_ID"
 
