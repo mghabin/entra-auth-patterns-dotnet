@@ -1,0 +1,13 @@
+# markdownlint config — pragmatic; the goal is consistency, not nitpicking.
+default: true
+MD013: false
+MD033: false
+MD038: false
+MD041: false
+MD034: false
+MD022: false
+MD032: false
+MD040: false
+MD028: false
+MD036: false
+MD031: false
