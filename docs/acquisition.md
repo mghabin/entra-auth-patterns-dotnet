@@ -4,7 +4,7 @@ Two flows you ever acquire on the server:
 
 | Flow | Who is the token *for* | Claim shape | OAuth grant |
 |---|---|---|---|
-| **App token** | The calling app/workload | `roles` *(when app roles are assigned/required)*, no `scp`; `idtyp=app` may be present (optional, defense-in-depth) | `client_credentials` (or FIC assertion) |
+| **App token** | The calling app/workload | `roles` *(when app roles are assigned/required)*, no `scp`; `idtyp=app` may not be present (defense-in-depth only — rely on `roles` + `azp` allow-list for enforcement, see [validation.md §4 App-token specific checks](validation.md#4-app-token-specific-checks)) | `client_credentials` (or FIC assertion) |
 | **User token** | The signed-in user | `scp` (delegated scopes); identity in `oid` + `tid` (use these for decisions); `name` / `preferred_username` for display | `authorization_code` (client) → API → **OBO** for downstream |
 
 > Rule of thumb: if there is no human in the request, you want an **app token**. If there is, propagate the user identity via **OBO**, don't fall back to an app token.
@@ -131,7 +131,7 @@ public class MyController(IDownstreamApi downstream) : ControllerBase
 
 What this does: server takes the inbound user token and calls `/oauth2/v2.0/token` with the OBO parameters — `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`, `requested_token_use=on_behalf_of`, and `assertion=<incoming access token>` — plus the API's own client credentials (MI/FIC/cert/secret). It gets back a new user token for the downstream resource; the downstream API still sees a *user* token (with `scp`, user `oid`, etc.).
 
-The credential the API uses to authenticate **itself** to the token endpoint during OBO can be **any** of the credentials in §1 (MI, FIC, cert, secret). Configure under `AzureAd:ClientCredentials`:
+The credential the API uses to authenticate **itself** to the token endpoint during OBO can be **any** of the credentials in §1 (MI, FIC, cert, secret). **Prefer MI when the API runs on Azure compute; FIC when it runs on a non-Azure platform with an OIDC issuer (GitHub Actions, AKS workload identity, EKS/GKE, on-prem k8s).** Cert is acceptable only when neither MI nor FIC is available; secret only as a documented, time-boxed exception. Configure under `AzureAd:ClientCredentials`:
 
 ```jsonc
 "AzureAd": {
@@ -161,7 +161,7 @@ The credential the API uses to authenticate **itself** to the token endpoint dur
 | App registration | `signInAudience: AzureADMyOrg` | `AzureADMultipleOrgs` (or `…AndPersonalMicrosoftAccount`) |
 | Admin consent | Once, in your tenant | Per-tenant; expose via admin-consent URL |
 | App token (`/.default`) | Issued by your tenant | Issued by the **calling tenant** — the app must be provisioned there |
-| OBO | Same-tenant | Token is issued in the **user's** home tenant; downstream must accept that issuer |
+| OBO | Same-tenant | Token is issued in the **user's** home tenant; downstream must accept that issuer. The downstream API **must** enforce a `tid` allow-list via `IssuerValidator` — see [validation.md §3 Issuer & audience](validation.md#3-issuer-audience-v1-vs-v2-single-vs-multi-tenant). |
 | MI / FIC | Same | MI is per-resource in your tenant — to call into other tenants you need a **multi-tenant app reg** + cert/FIC, not raw MI |
 
 Key takeaway: **MI is single-tenant by nature.** For cross-tenant S2S, use a multi-tenant app registration with a cert or FIC, or use MI to call your own multi-tenant app reg's federated credential.
@@ -170,7 +170,38 @@ Key takeaway: **MI is single-tenant by nature.** For cross-tenant S2S, use a mul
 
 ## 4. Token caching — don't get this wrong
 
-- **ASP.NET Core API**: `AddDistributedTokenCaches()` backed by Redis/SQL when running multi-instance. `AddInMemoryTokenCaches()` is fine for single-instance/dev.
-- **Worker**: MSAL's in-memory cache per `IConfidentialClientApplication` instance is fine; **reuse the instance** (singleton). For app tokens, MSAL caches per `(authority, scope)` automatically.
-- **Azure.Identity**: `TokenCredential` already caches; do **not** wrap in your own cache. Reuse a single credential instance.
-- Never cache raw tokens yourself. Never log them.
+App-token caching (S2S / `client_credentials`) and user-token caching (OBO) have different correctness requirements. Treat them separately.
+
+### 4a. App tokens
+
+- MSAL caches app tokens per `(authority, scope)` automatically — you **must** reuse a single `IConfidentialClientApplication` instance (singleton) for caching to take effect.
+- `Azure.Identity` `TokenCredential` already caches internally; **do not** wrap it in your own cache. Reuse a single credential instance per process.
+- In-memory cache is sufficient for app tokens because the cache key is `(authority, scope)` — no per-user partitioning, identical across instances.
+
+### 4b. User tokens (OBO)
+
+- The OBO cache is keyed by the inbound user's identity, so each instance would otherwise re-acquire on first hit. **Distributed cache is mandatory for multi-instance deployments**: `AddDistributedTokenCaches()` backed by Redis or SQL.
+- `AddInMemoryTokenCaches()` is acceptable **only** for single-instance or local dev.
+- An undersized / misconfigured distributed cache will silently fall back to per-instance acquisition; alert on a sudden drop in cache hit-rate. The downstream API still enforces validation per [validation.md](validation.md) — caching does not skip validation.
+
+### 4c. Universal rules
+
+- Never cache raw tokens yourself outside MSAL / `TokenCredential`.
+- Never log raw tokens. Log only the claims you used to authorize (`oid`, `tid`, `azp`, `roles`, `scp`).
+
+---
+
+## Sources
+
+- Microsoft identity platform overview — [learn.microsoft.com/entra/identity-platform/v2-overview](https://learn.microsoft.com/entra/identity-platform/v2-overview)
+- On-Behalf-Of flow — [learn.microsoft.com/entra/identity-platform/v2-oauth2-on-behalf-of-flow](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-on-behalf-of-flow)
+- Client credentials flow — [learn.microsoft.com/entra/identity-platform/v2-oauth2-client-creds-grant-flow](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-client-creds-grant-flow)
+- Managed identities for Azure resources — [learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview)
+- Workload identity federation — [learn.microsoft.com/entra/workload-id/workload-identity-federation](https://learn.microsoft.com/entra/workload-id/workload-identity-federation)
+- Microsoft.Identity.Web — [github.com/AzureAD/microsoft-identity-web](https://github.com/AzureAD/microsoft-identity-web)
+- Azure.Identity for .NET — [github.com/Azure/azure-sdk-for-net/tree/main/sdk/identity/Azure.Identity](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/identity/Azure.Identity)
+- MSAL.NET — [github.com/AzureAD/microsoft-authentication-library-for-dotnet](https://github.com/AzureAD/microsoft-authentication-library-for-dotnet)
+- Token caching in MSAL.NET — [learn.microsoft.com/entra/msal/dotnet/how-to/token-cache-serialization](https://learn.microsoft.com/entra/msal/dotnet/how-to/token-cache-serialization)
+- RFC 6749 — The OAuth 2.0 Authorization Framework — [rfc-editor.org/rfc/rfc6749](https://www.rfc-editor.org/rfc/rfc6749)
+- RFC 8693 — OAuth 2.0 Token Exchange — [rfc-editor.org/rfc/rfc8693](https://www.rfc-editor.org/rfc/rfc8693)
+- dotnet-engineering-guide ch02 §10 — auth doctrine — [github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz)
