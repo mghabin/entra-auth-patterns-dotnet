@@ -1,19 +1,15 @@
-using Ftgo.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Identity.Web;
-using Microsoft.Identity.Web.Resource;
 
 namespace Ftgo.Orders.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
 public sealed class OrdersController : ControllerBase
 {
-    /// <summary>User-token endpoint.</summary>
+    /// <summary>User-token endpoint. Bound to the <see cref="OrdersAuthorizationPolicies.Delegated"/> named policy.</summary>
     [HttpGet("whoami")]
-    [RequiredScope("orders.read")]
+    [Authorize(Policy = OrdersAuthorizationPolicies.Delegated)]
     public IActionResult WhoAmI() => Ok(new
     {
         service = "Ftgo.Orders.Api",
@@ -24,10 +20,9 @@ public sealed class OrdersController : ControllerBase
         name = User.FindFirst("name")?.Value
     });
 
-    /// <summary>App-only endpoint: requires the <c>Orders.Process</c> role and an allow-listed caller app.</summary>
+    /// <summary>App-only endpoint. Bound to the <see cref="OrdersAuthorizationPolicies.App"/> named policy.</summary>
     [HttpGet("system")]
-    [Authorize(Roles = "Orders.Process")]
-    [RequireClientApp]
+    [Authorize(Policy = OrdersAuthorizationPolicies.App)]
     public IActionResult System() => Ok(new
     {
         service = "Ftgo.Orders.Api",

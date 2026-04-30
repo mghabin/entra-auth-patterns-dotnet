@@ -53,6 +53,8 @@ public static class EntraAuthServiceCollectionExtensions
             });
         });
         services.AddSingleton<IAuthorizationHandler, RequireClientAppHandler>();
+        services.AddSingleton<IAuthorizationHandler, RequireDelegatedScopeHandler>();
+        services.AddSingleton<IAuthorizationHandler, RequireAppRoleHandler>();
 
         return services;
     }
@@ -72,6 +74,17 @@ internal sealed class EntraAuthJwtPostConfigure(
 
         var opts = options.Value;
         var clientId = configuration["AzureAd:ClientId"];
+
+        // Defense in depth — be explicit about every validator. Defaults shift between SDK
+        // versions; doctrine (eng-guide ch02 §10.1) requires we pin them at the call site so a
+        // future SDK upgrade can't silently flip a switch off.
+        bearerOptions.MapInboundClaims = false; // preserve scp/roles/azp verbatim.
+        bearerOptions.TokenValidationParameters.ValidateIssuerSigningKey = true;
+        bearerOptions.TokenValidationParameters.ValidateLifetime = true;
+        bearerOptions.TokenValidationParameters.ValidateAudience = true;
+        bearerOptions.TokenValidationParameters.ValidateIssuer = true;
+        bearerOptions.TokenValidationParameters.RequireSignedTokens = true;
+        bearerOptions.TokenValidationParameters.RequireExpirationTime = true;
 
         var validAudiences = new List<string>();
         if (!string.IsNullOrWhiteSpace(clientId)) validAudiences.Add(clientId);
