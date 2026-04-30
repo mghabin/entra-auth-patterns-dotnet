@@ -45,7 +45,7 @@ var token = await new ManagedIdentityCredential()
 
 Notes:
 - MI is **system-assigned** (lifecycle tied to resource) or **user-assigned** (portable; preferred for shared infra and blue/green).
-- MI tokens are issued by `https://login.microsoftonline.com/<tenant>/` with `appid` of the MI's service principal — see [validation](validation.md#mi-tokens).
+- MI tokens are issued by `https://login.microsoftonline.com/<tenant>/` with `appid` of the MI's service principal — see [validation](validation.md#5-mi-tokens).
 - MI cannot do OBO. MI cannot represent a user.
 
 ### 1b. Workload Identity Federation (FIC) — preferred outside Azure

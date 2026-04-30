@@ -5,6 +5,15 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com)
 
+## Read this first
+
+Before diving into the chapters, the four cross-cutting synthesis pages tell you whether this guide fits, what it covers, what every term means, and which decision lives where:
+
+- [`SCOPE.md`](SCOPE.md) — who this guide is for, who it isn't, and the explicit non-goals.
+- [`docs/decision-trees.md`](docs/decision-trees.md) — five Mermaid trees for the highest-leverage Entra decisions; entry point for the reading path.
+- [`coverage-map.md`](coverage-map.md) — exact ownership map: which doc owns which doctrine; siblings link, never re-decide.
+- [`glossary.md`](glossary.md) — every normatively-used term with a primary-source link.
+
 A working reference for **acquiring** and **validating** Microsoft Entra ID
 tokens in .NET 10 server-side apps. Covers app tokens (S2S / daemon) and
 user tokens (delegated / OBO) with the credential type that matters in
@@ -126,6 +135,8 @@ Who is calling?
         │   └── Use a Certificate on an app registration.               ← acceptable
         └── Last resort: Client Secret on an app registration.          ← avoid
 ```
+
+Full set of decision trees → [`docs/decision-trees.md`](docs/decision-trees.md).
 
 ## Library cheat-sheet
 
