@@ -30,6 +30,11 @@ public key and issues an access token.
 var cert = X509CertificateLoader.LoadPkcs12FromFile(
     "/path/to/cert.pfx",
     password: null,
+    // EphemeralKeySet: hold the private key in process memory only;
+    // do NOT persist a copy to the user/machine keystore on disk.
+    // Required on Linux containers and recommended everywhere — it
+    // prevents stale key material from leaking to the host filesystem
+    // across container restarts and avoids ACL drift on Windows.
     keyStorageFlags: X509KeyStorageFlags.EphemeralKeySet);
 
 var credential = new ClientCertificateCredential(
@@ -65,6 +70,28 @@ var credential = new ClientCertificateCredential(
     tenantId, clientId, cert);
 ```
 
+## Rotation cadence
+
+- **Must** rotate at least annually. The Entra app-registration UI
+  permits up to 24 months on certificate credentials; **don't** use
+  the maximum.
+- **Best practice: rotate every 90 days** (matches the Let's Encrypt
+  / public-CA cadence and the `openssl req -days 90 …` example below).
+  Short lifetimes mean a leaked private key is useful to an attacker
+  for a bounded window.
+- **Should** automate via Azure Key Vault certificate auto-renewal +
+  an event-grid hook that reuploads the new public-key portion to the
+  Entra app reg via `az ad app credential reset --id $APP_ID --cert @cert.pem`.
+  Manual rotation is error-prone: the failure mode is "expired cert in
+  prod at 03:00" because the rotation runbook lived in someone's
+  bookmarks.
+- **Must** keep `notBefore` overlap windows (publish the new cert
+  before retiring the old) so that in-flight requests don't see a
+  rejected `kid`. Entra accepts multiple cert credentials per app reg
+  for exactly this reason.
+- **Must** monitor cert expiry. `az ad app credential list --id $APP_ID`
+  in a scheduled job, alerting at T-30d / T-7d / T-1d.
+
 ## Setup
 
 1. Generate a cert (`openssl req -x509 -newkey rsa:2048 -days 90 …`).
@@ -84,3 +111,26 @@ adding nothing except more things to rotate.
 We kept the pattern in this doc because the on-prem and HSM-bound
 scenarios are real. We dropped the deployed service because it
 taught the wrong default for cloud.
+
+## Cross-references
+
+- Acquisition wiring (which library, scope strings) — [`acquisition.md` §1c](../acquisition.md#1c-certificate-on-an-app-registration--acceptable-when-mific-unavailable).
+- Rotation as a cross-cutting operational concern — [`best-practices.md` — Credentials](../best-practices.md#credentials).
+- Picker decision (when MI vs FIC vs cert) — [`index.md`](index.md#decision-matrix).
+- Sibling credential patterns — [`managed-identity.md`](managed-identity.md), [`federated-identity.md`](federated-identity.md), [`client-secret.md`](client-secret.md).
+- Per-scenario credential picker — [`matrix.md`](../matrix.md).
+- Auth-policy doctrine (delegated vs app-only) — dotnet-engineering-guide [ch02 §10](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz).
+
+---
+
+## Sources
+
+- Microsoft identity platform — Certificate credentials for application authentication — [learn.microsoft.com/entra/identity-platform/certificate-credentials](https://learn.microsoft.com/entra/identity-platform/certificate-credentials)
+- `ClientCertificateCredential` reference — [learn.microsoft.com/dotnet/api/azure.identity.clientcertificatecredential](https://learn.microsoft.com/dotnet/api/azure.identity.clientcertificatecredential)
+- `X509KeyStorageFlags.EphemeralKeySet` — [learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509keystorageflags](https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509keystorageflags)
+- Azure Key Vault — Certificate auto-renewal — [learn.microsoft.com/azure/key-vault/certificates/tutorial-rotate-certificates](https://learn.microsoft.com/azure/key-vault/certificates/tutorial-rotate-certificates)
+- OWASP — Cryptographic Storage Cheat Sheet — [cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
+- OWASP — Key Management Cheat Sheet — [cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html)
+- NIST SP 800-57 Part 1 Rev. 5 — Recommendation for Key Management — [nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r5.pdf](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r5.pdf)
+- FIPS 140-2 — Security Requirements for Cryptographic Modules — [csrc.nist.gov/publications/detail/fips/140/2/final](https://csrc.nist.gov/publications/detail/fips/140/2/final)
+- PCI DSS v4.0 — Requirement 3 (key management) — [pcisecuritystandards.org/document_library/](https://www.pcisecuritystandards.org/document_library/)

@@ -11,12 +11,26 @@ code or config. Your code asks the IMDS endpoint
 identity to Entra; you get a JWT. No cert, no secret, no rotation.
 
 Two flavors:
-- **System-assigned**: lifecycle bound to the resource (delete the
-  Container App → identity is gone). Simplest. Used by every service
-  in this sample.
-- **User-assigned**: standalone resource you create. Outlives any
+
+- **System-assigned (SAMI)**: lifecycle bound to the resource (delete the
+  Container App → identity is gone). Simplest. One identity per
+  resource — narrowest blast radius. Used by every service in this
+  sample.
+- **User-assigned (UAMI)**: standalone resource you create. Outlives any
   single workload, and one identity can be attached to many resources.
-  Use when you need stable identity across deploys.
+  Use when you need stable identity across deploys, or when several
+  replicas / regional deployments of the *same* workload must share a
+  principal.
+
+**Security implication of UAMI sharing.** Reusing a single UAMI across
+unrelated resources widens the blast radius — a compromise of any one
+host that has the UAMI attached lets the attacker mint tokens with the
+union of every role assignment that UAMI holds. **For high-sensitivity
+workloads, prefer SAMI (one per resource), or a dedicated UAMI per
+workload (not per cluster, not per subscription).** Treat a UAMI like
+you would a service principal: one workload, one identity. See
+[`glossary.md` — Managed Identity (MI)](../../glossary.md#managed-identity-mi--system-assigned-sami-user-assigned-uami)
+for the canonical definitions.
 
 ## Code (worker calling an Entra-protected API)
 
@@ -84,7 +98,33 @@ need a worker app reg. You need:
    ```csharp
    var token = await new ManagedIdentityCredential().GetTokenAsync(
        new TokenRequestContext(["https://graph.microsoft.com/.default"]), ct);
+   // Failure mode: if the MI's SP is missing the Graph app role
+   // (e.g. User.Read.All not granted at step 2 above), the call throws
+   // Azure.Identity.AuthenticationFailedException with an inner
+   // MsalServiceException carrying AADSTS500011 / AADSTS65001-style
+   // "no app role assignment" detail. Fix is at the role-assignment
+   // layer (Graph), not in code.
    ```
+
+## DefaultAzureCredential vs ManagedIdentityCredential
+
+In this sample, **deployed code uses `ManagedIdentityCredential`
+explicitly** (not `DefaultAzureCredential`). Reasons:
+
+- **Predictable failure mode.** `DefaultAzureCredential` walks a chain
+  (env vars → workload identity → MI → VS → Azure CLI → …). On Azure
+  compute the MI step succeeds and the rest is dead weight; in a
+  misconfigured env it can silently fall through to a developer's
+  `az login` cached token, masking a real wiring bug.
+- **Fewer round-trips.** No probing of credential sources that will
+  never be available in production.
+- **Local dev still works.** `run-locally.md` documents using
+  `DefaultAzureCredential` (or `AzureCliCredential`) on a developer
+  machine where there is no MI; production code paths stay explicit.
+
+See [`glossary.md` — DefaultAzureCredential](../../glossary.md#defaultazurecredential)
+and [`acquisition.md` §1a](../acquisition.md#1a-managed-identity--preferred-when-in-azure)
+for the acquisition-side wiring.
 
 ## Why this is the default
 
@@ -97,3 +137,27 @@ need a worker app reg. You need:
 - **Same surface as everything else.** `TokenCredential` is the
   Azure SDK base type — works with Azure Storage, Cosmos DB, Service
   Bus, your own APIs, and Microsoft Graph identically.
+
+## Cross-references
+
+- Acquisition wiring (which library, caching, scope strings) — [`acquisition.md` §1a](../acquisition.md#1a-managed-identity--preferred-when-in-azure).
+- Receiver-side validation of MI tokens (`idtyp`, `azp` allow-list) — [`validation.md` §5](../validation.md#5-mi-tokens).
+- Picker decision (when MI vs FIC vs cert) — [`index.md`](index.md#decision-matrix).
+- Sibling credential patterns — [`federated-identity.md`](federated-identity.md), [`cert.md`](cert.md), [`client-secret.md`](client-secret.md).
+- Local-dev fallback when there is no MI — [`run-locally.md`](../run-locally.md).
+- Auth-policy doctrine (delegated vs app-only, never OR-claims) — dotnet-engineering-guide [ch02 §10](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz).
+
+---
+
+## Sources
+
+- Managed identities for Azure resources — overview — [learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview)
+- System-assigned vs user-assigned managed identity — [learn.microsoft.com/entra/identity/managed-identities-azure-resources/managed-identities-faq](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/managed-identities-faq)
+- How to use managed identities with Azure Container Apps — [learn.microsoft.com/azure/container-apps/managed-identity](https://learn.microsoft.com/azure/container-apps/managed-identity)
+- Azure Instance Metadata Service (IMDS) — [learn.microsoft.com/azure/virtual-machines/instance-metadata-service](https://learn.microsoft.com/azure/virtual-machines/instance-metadata-service)
+- How managed identities work with virtual machines (IMDS token endpoint) — [learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-managed-identities-work-vm](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-managed-identities-work-vm)
+- `ManagedIdentityCredential` reference — [learn.microsoft.com/dotnet/api/azure.identity.managedidentitycredential](https://learn.microsoft.com/dotnet/api/azure.identity.managedidentitycredential)
+- `DefaultAzureCredential` reference — [learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential)
+- Azure SDK for .NET — Identity client library — [learn.microsoft.com/dotnet/api/overview/azure/identity-readme](https://learn.microsoft.com/dotnet/api/overview/azure/identity-readme)
+- Azure SDK identity guidance — [github.com/Azure/azure-sdk-for-net/blob/main/sdk/identity/Azure.Identity/README.md](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/identity/Azure.Identity/README.md)
+- Granting Microsoft Graph app roles to a managed identity — [learn.microsoft.com/graph/permissions-grant-via-msgraph-rest-api](https://learn.microsoft.com/graph/permissions-grant-via-msgraph-rest-api)
