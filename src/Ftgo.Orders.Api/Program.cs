@@ -1,4 +1,5 @@
 using Ftgo.Auth;
+using Ftgo.Orders.Api;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,15 @@ builder.Services.AddEntraAuthProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
+
+// Doctrine: split delegated vs app into two named, mutually-exclusive policies.
+// Never accept tokens that carry both `scp` and `roles` — that means a misconfigured app
+// registration minted a mixed token. See eng-guide ch02 §10 / decision-trees.md Tree 4.
+builder.Services.AddAuthorization(o =>
+{
+    o.AddDelegatedPolicy(OrdersAuthorizationPolicies.Delegated, "orders.read");
+    o.AddAppPolicy(OrdersAuthorizationPolicies.App, "Orders.Process");
+});
 
 var app = builder.Build();
 app.UseEntraAuthProblemDetails();

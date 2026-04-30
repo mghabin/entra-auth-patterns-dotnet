@@ -107,6 +107,25 @@ public sealed class EntraAuthJwtPostConfigureTests
         Should.Throw<InvalidOperationException>(
             () => sut.PostConfigure(JwtBearerDefaults.AuthenticationScheme, jwtOptions));
     }
+
+    [Fact]
+    public void PostConfigure_PinsExplicitDefensiveValidationDefaults()
+    {
+        var sut = CreateSut(new EntraAuthOptions(), BuildConfig(Guid.NewGuid().ToString()));
+        var jwtOptions = new JwtBearerOptions();
+
+        sut.PostConfigure(JwtBearerDefaults.AuthenticationScheme, jwtOptions);
+
+        // Doctrine (eng-guide ch02 §10.1): be explicit about every validator — defaults
+        // shift between SDK versions.
+        jwtOptions.MapInboundClaims.ShouldBeFalse();
+        jwtOptions.TokenValidationParameters.ValidateIssuerSigningKey.ShouldBeTrue();
+        jwtOptions.TokenValidationParameters.ValidateLifetime.ShouldBeTrue();
+        jwtOptions.TokenValidationParameters.ValidateAudience.ShouldBeTrue();
+        jwtOptions.TokenValidationParameters.ValidateIssuer.ShouldBeTrue();
+        jwtOptions.TokenValidationParameters.RequireSignedTokens.ShouldBeTrue();
+        jwtOptions.TokenValidationParameters.RequireExpirationTime.ShouldBeTrue();
+    }
 }
 
 public sealed class RequireClientAppAttributeTests
