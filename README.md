@@ -7,12 +7,15 @@
 
 ## Read this first
 
-Before diving into the chapters, the four cross-cutting synthesis pages tell you whether this guide fits, what it covers, what every term means, and which decision lives where:
+Before diving into the chapters, the five cross-cutting synthesis pages tell you whether this guide fits, where canonical guidance lives, what it covers, what every term means, and which decision lives where:
 
+- [`DOCTRINE.md`](DOCTRINE.md) — **read first.** This repo defers to [`mghabin/dotnet-engineering-guide`](https://github.com/mghabin/dotnet-engineering-guide) and [`mghabin/infra-engineering-guide`](https://github.com/mghabin/infra-engineering-guide) for everything that is not an Entra-specific specialization. The doctrine table tells you which upstream chapter owns which topic.
 - [`SCOPE.md`](SCOPE.md) — who this guide is for, who it isn't, and the explicit non-goals.
 - [`docs/decision-trees.md`](docs/decision-trees.md) — five Mermaid trees for the highest-leverage Entra decisions; entry point for the reading path.
 - [`coverage-map.md`](coverage-map.md) — exact ownership map: which doc owns which doctrine; siblings link, never re-decide.
 - [`glossary.md`](glossary.md) — every normatively-used term with a primary-source link.
+
+> **For AI agents:** see [`.github/copilot-instructions.md`](.github/copilot-instructions.md). The search-order contract is mandatory.
 
 A working reference for **acquiring** and **validating** Microsoft Entra ID
 tokens in .NET 10 server-side apps. Covers app tokens (S2S / daemon) and
