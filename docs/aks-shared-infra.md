@@ -12,6 +12,13 @@ That's a **code/config duplication problem**, not a runtime traffic problem. The
 > **Centralize the *implementation* of auth across all products — not the *runtime path*.**
 > One supported way to do auth in our org, owned by a small platform team, consumed by every product as a library + IaC module. Per-request enforcement stays in each service (zero-trust, no SPOF). The edge handles uniform first-line policy.
 
+## Doctrine — named auth schemes (must)
+
+- Code **MUST** branch on scheme name when an API serves more than one identity provider or audience type.
+- A single `[Authorize]` attribute **MUST NEVER** silently accept multiple issuers, audiences, or token shapes — register each as a distinct named `JwtBearer` scheme and select it per route or per controller.
+- Multiple `AddJwtBearer(...)` calls under the same default scheme name silently *fall through* to the first one that validates. That is a privilege-escalation bug, not a feature. Avoid.
+- Owner: [`validation.md`](validation.md) §3 (multi-tenant + audience) and the .NET auth-policy doctrine in dotnet-engineering-guide [ch02 §10](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz). The library wires this for free; teams **MUST NOT** call `AddJwtBearer(...)` directly.
+
 ## What "centralized auth" actually is — four artifacts
 
 ### 1. `EntraAuth.Auth` shared NuGet
@@ -87,7 +94,8 @@ The library approach gives you everything you wanted (one authoritative implemen
 ## Cross-service (east-west) communication
 You said "some cross-service calls." The boring, correct answer:
 - Caller acquires an **app token** (client credentials) for the callee's API, scope `<callee-app-id>/.default`. Use Workload Identity / FIC in AKS — see [acquisition.md](acquisition.md).
-- Callee validates with `[Authorize(Roles = "Grading.Submission.Write")]` **and** `RequireClientApp("<caller-app-id>")` from the library.
+- Callee **MUST** validate **both** `roles` (app-role gate) **AND** `azp` / `appid` (per-client allow-list). Either alone is insufficient: `roles` without `azp` admits any tenant SP that was granted the role; `azp` without `roles` admits any token from that client regardless of permission. Owner: [`validation.md` §4](validation.md#4-app-token-specific-checks) and dotnet-engineering-guide [ch02 §10](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz).
+- In code that means `[Authorize(Roles = "Grading.Submission.Write")]` **and** `RequireClientApp("<caller-app-id>")` from the library — **never one without the other** on an app-only endpoint.
 - That's it. **No mesh required for this.**
 
 A service mesh (Istio/Linkerd) is the right end-state for **mTLS + traffic management**; it is *not* the reason to centralize auth. Defer until the org is ready to operate one.
@@ -100,6 +108,14 @@ A service mesh (Istio/Linkerd) is the right end-state for **mTLS + traffic manag
 5. **Ship `EntraAuth.Auth.Edge`** module; turn it on per product as adoption reaches it.
 6. **Deprecate** in-repo `JwtBearer` boilerplate via a Roslyn analyzer once adoption is high enough.
 7. **Quarterly review** of standards, app-role taxonomy, and tenant allow-list governance.
+
+### Rollback strategy (must)
+
+- Every adopter pins the `EntraAuth.Auth` version in their csproj; no floating `*` versions. A bad library release is rolled back per-service by reverting that pin and redeploying — no platform-team coordination needed.
+- The library follows **semver**: breaking config or behaviour changes go in a major; deprecations ship one major in advance with a Roslyn analyzer warning.
+- Each release is canaried in **one pilot service first**, observed for at least one business cycle on the auth-failure metrics emitted by the library itself, and only then promoted as the recommended version.
+- The edge module (`EntraAuth.Auth.Edge`) is rolled back via the same Bicep/Helm pipeline that deployed it — the previous chart digest is the rollback target. The library re-validates on the pod, so an edge rollback **MUST NOT** loosen what the library still enforces (defense-in-depth holds during rollback).
+- Roslyn analyzer enforcement (step 6) ships as a **warning first, error later** — never both in the same release — so a bad analyzer rule cannot block every product's build at once.
 
 ## Risks & anti-patterns
 - ❌ Building a runtime auth service. Covered above.
@@ -122,3 +138,15 @@ A service mesh (Istio/Linkerd) is the right end-state for **mTLS + traffic manag
 - [validation.md](validation.md) — what the library wires up under the hood.
 - [matrix.md](matrix.md) — per-scenario picks.
 - [best-practices.md](best-practices.md) — rules the library enforces by default.
+
+## Sources
+
+- Microsoft Entra ID best practices — [learn.microsoft.com/entra/identity/fundamentals/identity-best-practices-checklist](https://learn.microsoft.com/entra/identity/fundamentals/identity-best-practices-checklist)
+- Microsoft Entra app roles — [learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps)
+- Microsoft.Identity.Web — multiple authentication schemes — [github.com/AzureAD/microsoft-identity-web/wiki/Multiple-Authentication-Schemes](https://github.com/AzureAD/microsoft-identity-web/wiki/Multiple-Authentication-Schemes)
+- Continuous Access Evaluation (CAE) — [learn.microsoft.com/entra/identity/conditional-access/concept-continuous-access-evaluation](https://learn.microsoft.com/entra/identity/conditional-access/concept-continuous-access-evaluation)
+- Azure Kubernetes Service — workload identity — [learn.microsoft.com/azure/aks/workload-identity-overview](https://learn.microsoft.com/azure/aks/workload-identity-overview)
+- OWASP Zero-Trust Architecture cheat sheet — [cheatsheetseries.owasp.org/cheatsheets/Zero_Trust_Architecture_Cheat_Sheet.html](https://cheatsheetseries.owasp.org/cheatsheets/Zero_Trust_Architecture_Cheat_Sheet.html)
+- NIST SP 800-207 Zero Trust Architecture — [nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf)
+- infra-engineering-guide ch04 (containers/Kubernetes — service mesh "when not to") — [github.com/mghabin/infra-engineering-guide/blob/main/docs/04-containers-k8s.md](https://github.com/mghabin/infra-engineering-guide/blob/main/docs/04-containers-k8s.md)
+- dotnet-engineering-guide ch02 §10 (auth doctrine) — [github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz)
