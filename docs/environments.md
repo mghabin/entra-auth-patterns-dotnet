@@ -4,28 +4,30 @@ Three environments share one Azure subscription and one Entra tenant:
 
 | Env | RG | Trigger | Gate |
 |---|---|---|---|
-| **dev** | `rg-ftgo-dev-eastus` | every push to `main` | dev success |
-| **ppe** | `rg-ftgo-ppe-eastus` | dev success | (none — auto-promote) |
-| **prod** | `rg-ftgo-prod-eastus` | ppe success | required reviewer |
+| **dev** | `rg-ftgo-dev-eastus` | every push to `main` | none |
+| **ppe** | `rg-ftgo-ppe-eastus` | manual `workflow_dispatch` (`environment=ppe` or `prod`) | dev success |
+| **prod** | `rg-ftgo-prod-eastus` | manual `workflow_dispatch` (`environment=prod`) | ppe success **and** required reviewer on the `prod` GitHub Environment |
 
 ## Promotion model
 
 ```
-push → build-images (matrix × 7) → tags :sha-XXX, :latest
+push → build-images (matrix × 4) → tags :sha-XXX, :latest
             │
             ▼
-   deploy-dev  (always-on path)
-            │ (success)
-            ▼
-   deploy-ppe  (concurrency-group: ppe)
-            │ (success)
-            ▼
-   deploy-prod (concurrency-group: prod, env reviewer required)
+   deploy-dev          (auto on push to main)
+            │
+            ▼ (only if `workflow_dispatch` was invoked with environment=ppe or prod)
+   deploy-ppe          (concurrency-group: ppe)
+            │
+            ▼ (only if `workflow_dispatch` was invoked with environment=prod)
+   deploy-prod         (concurrency-group: prod, env reviewer required)
 ```
 
+- **dev is fully automatic** on every push to `main`. No human gate.
+- **ppe and prod are manual-only.** Operators promote a known-good SHA via `gh workflow run cd.yml -f environment=ppe` (deploys dev → ppe) or `-f environment=prod` (deploys dev → ppe → prod). This keeps idle Azure spend to ~$0/month — only dev runs continuously between merges; ppe and prod are spun up on demand.
 - **Single image digest** is deployed to all three envs — built once, promoted many.
 - `workflow_dispatch` accepts an `imageTag` input to redeploy a previously-built SHA without rebuilding.
-- `cancel-in-progress: false` on ppe/prod so a follow-up push never interrupts a running deploy.
+- `cancel-in-progress: false` on ppe/prod so a follow-up dispatch never interrupts a running deploy.
 
 > **Single-digest implication.** Because the *same* image digest flows
 > dev → ppe → prod, a regression caught in dev **blocks ppe and prod
@@ -38,11 +40,12 @@ push → build-images (matrix × 7) → tags :sha-XXX, :latest
 > in CD config without bumping the SHA — they will not deploy until
 > dev rebuilds.
 
-## Why ppe has no human gate
+## Why ppe and prod are manual
 
-- **dev → ppe is automatic on dev success; only prod requires a reviewer.** The trade-off is **deliberate**: ppe exists to surface regressions that only appear against production-shaped infra (real ACA cold-start, real LAW ingestion, real Entra app-reg quotas) **before** a human is asked to approve prod. Inserting a human between dev and ppe just means ppe lags dev — and an out-of-date ppe catches **fewer** real issues, not more.
-- **prod is the gate that matters.** A bad SHA reaching ppe is a paged on-call event for the deploy team; a bad SHA reaching prod is a customer-impacting incident. Spending the human-review budget on the *one* hop where the blast radius justifies it is a deliberate **speed-vs-risk** allocation.
-- **Adjust per organisation.** If your org's ppe carries data subject to compliance review (HIPAA, FedRAMP), or is shared with external partners, add a required reviewer on the `ppe` GitHub Environment too — `bootstrap-env.sh` accepts a reviewer list per env. The default in this sample assumes ppe is internal-only.
+- **Cost first.** This sample runs on consumption-tier Azure Container Apps with `minReplicas=0` end-to-end so an idle environment bills near-zero. Auto-promoting every push through ppe and prod would warm three environments continuously and break the $0-idle promise. See [`cost-zero.md`](cost-zero.md).
+- **Reproducibility second.** Manual promotion forces operators to think about which SHA they're shipping and capture the rollback target before pressing the button. This matches the dotnet-engineering-guide ch07 cloud-native posture: humans approve the move into shared environments; automation owns the actual deploy mechanics.
+- **prod is the gate that matters.** A bad SHA reaching ppe is a paged on-call event; a bad SHA reaching prod is a customer-impacting incident. The required reviewer on the `prod` GitHub Environment is the last human checkpoint.
+- **Adjust per organisation.** If your org runs ppe continuously (active soak testing, partner integration), drop the `if: github.event_name == 'workflow_dispatch'` guards on the `deploy-ppe` job in `cd.yml` and accept the cost. The trade-off is **deliberate** in this sample: speed for $0 idle.
 
 ## Per-env configuration
 
@@ -63,9 +66,9 @@ The CD identity per env (`ftgo-{env}-cd-mi`) is scoped to its own resource group
 ## Adding a 4th environment (e.g., `staging`)
 
 1. Add `infra/bicep/azure.staging.bicepparam` and `infra/bicep/main.staging.bicepparam`.
-2. `./scripts/bootstrap-env.sh ENV=staging`.
-3. Add a `deploy-staging` job to `cd.yml`, modeled on `deploy-ppe`, with `needs:` set to the upstream env you want it promoted from.
-4. `./scripts/provision-apps.sh ENV=staging` after the first deploy.
+1. `./scripts/bootstrap-env.sh ENV=staging`.
+1. Add a `deploy-staging` job to `cd.yml`, modeled on `deploy-ppe`, with `needs:` set to the upstream env you want it promoted from.
+1. `./scripts/provision-apps.sh ENV=staging` after the first deploy.
 
 ## Production guardrails
 
@@ -76,7 +79,7 @@ The CD identity per env (`ftgo-{env}-cd-mi`) is scoped to its own resource group
 
 ## Cleanup
 
-Nightly at 03:00 UTC, `cd-cleanup.yml` resets every dev and ppe container app to `min=0/max=3`. This is a defensive measure against forgotten always-on overrides; it never touches prod.
+Nightly at 03:00 UTC, `cd-cleanup.yml` resets every dev and ppe container app to `min=0/max=3`. This is a defensive measure against forgotten always-on overrides; it never touches prod. For complete teardown of an environment, see [`operations.md`](operations.md#teardown).
 
 To tear down an env entirely:
 

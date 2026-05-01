@@ -38,7 +38,9 @@ The OIDC standard claim ([OpenID Connect Core §2](https://openid.net/specs/open
 
 ### BFF (Backend-for-Frontend)
 
-Server-side façade that performs the OIDC sign-in on behalf of a browser SPA, holds the user's refresh token in a server-side cache, and brokers downstream API calls (often via *OBO*). In this sample, `Ftgo.ApiGateway` is the BFF. Pattern named in Sam Newman's *Building Microservices* and called out by Microsoft as the recommended browser-app shape. [Microsoft identity platform — BFF pattern](https://learn.microsoft.com/azure/architecture/patterns/backends-for-frontends).
+Server-side façade that performs the OIDC sign-in on behalf of a browser SPA, holds the user's refresh token in a server-side cache, and brokers downstream API calls (often via *OBO*). Pattern named in Sam Newman's *Building Microservices* and called out by Microsoft as the recommended browser-app shape. [Microsoft identity platform — BFF pattern](https://learn.microsoft.com/azure/architecture/patterns/backends-for-frontends).
+
+> **In this sample**, `Ftgo.ApiGateway` is named after — and demonstrates the *downstream* half of — the BFF pattern (server-side OBO + S2S fan-out, no client secrets via `SignedAssertionFromManagedIdentity`). It is **not** a strict BFF: the user OIDC sign-in is performed **client-side** by the Scalar UI using Auth Code + PKCE, and the gateway only validates the bearer JWT (`AddMicrosoftIdentityWebApi`) — there is no server-side cookie session and no refresh-token cache. Treat it as an *API gateway with token aggregation*; for the full BFF (cookie session + server-side token store), front it with [Duende.BFF](https://docs.duendesoftware.com/identityserver/v7/bff/) or YARP-with-cookies.
 
 ---
 
