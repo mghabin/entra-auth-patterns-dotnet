@@ -97,7 +97,7 @@ az lock delete --name ftgo-prod-rg-delete-lock --resource-group rg-ftgo-prod-eas
 ```bash
 gh workflow run cd.yml \
   -f environment=dev \
-  -f image_tag=$(git rev-parse --short HEAD)
+  -f imageTag=$(git rev-parse --short HEAD)
 ```
 
 Smoke-test polls `/health/live` for up to 180s after the deploy

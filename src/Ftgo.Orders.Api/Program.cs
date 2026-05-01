@@ -24,7 +24,7 @@ builder.Services.AddEntraAuthForwardedHeaders();
 
 var app = builder.Build();
 app.UseForwardedHeaders();
-app.UseEntraAuthSecurityHeaders();
+app.UseEntraAuthSecurityHeaders(EntraAuthSecurityHeaderOptions.ScalarFriendly());
 app.UseEntraAuthProblemDetails();
 app.UseAuthentication();
 app.UseAuthorization();

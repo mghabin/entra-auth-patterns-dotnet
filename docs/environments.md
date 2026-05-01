@@ -75,7 +75,7 @@ The CD identity per env (`ftgo-{env}-cd-mi`) is scoped to its own resource group
 - **Required reviewer** on the `prod` GitHub Environment (configured by `bootstrap-env.sh`).
 - **Concurrency group `prod`** with `cancel-in-progress: false`.
 - **No nightly scale-reset** for prod (the cleanup workflow skips it).
-- **Min replicas = 0** for prod web apps too. To pin one replica to eliminate cold-start, override `cpu`/`memory` and `minReplicas` via the bicepparam file (left as a knob; default is scale-to-zero everywhere for free-tier safety).
+- **Min replicas = 0** for prod web apps too. To pin one replica to eliminate cold-start, raise the `maxReplicas` parameter on `container-app.bicep` *and* edit the module to surface a `minReplicas` parameter (currently hard-coded to `0` to keep idle cost at $0 — see [`docs/cost-zero.md`](cost-zero.md)).
 
 ## Cleanup
 

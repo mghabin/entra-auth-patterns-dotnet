@@ -98,6 +98,18 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
           ], extraEnvVars)
           probes: enableIngress ? [
             {
+              type: 'Startup'
+              httpGet: {
+                path: '/health/startup'
+                port: 8080
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 2
+              periodSeconds:       5
+              timeoutSeconds:      3
+              failureThreshold:    24
+            }
+            {
               type: 'Liveness'
               httpGet: {
                 path: '/health/live'

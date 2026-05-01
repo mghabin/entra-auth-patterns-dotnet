@@ -44,7 +44,7 @@ What this does (per env, idempotent):
 1. Creates `rg-ftgo-{env}-eastus`.
 1. Creates `ftgo-{env}-cd-mi` user-assigned MI in that RG.
 1. Creates a federated identity credential bound to `repo:OWNER/REPO:environment:{env}`.
-1. Grants Contributor on the resource group; for prod, also User Access Administrator (so it can grant Key Vault RBAC).
+1. Grants Contributor on the resource group; **all envs** also get User Access Administrator (RG-scoped) so the deploy pipeline can assign Key Vault RBAC roles to per-app system-MIs created by `azure.bicep`. The role is RG-scoped — the CD identity cannot assign roles outside its own env's RG.
 1. Creates the GitHub Environment, sets `AZURE_CLIENT_ID` / `AZURE_SUBSCRIPTION_ID` env variables, and (one-time) the repo-scoped `AZURE_TENANT_ID` secret.
 1. For prod, requires a single reviewer before deploys can proceed.
 

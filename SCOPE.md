@@ -55,7 +55,7 @@ Specifically:
 These are deliberately out of scope.
 Call them out so readers don't expect them.
 
-- **Not a UI / client-side guide.** Browser sign-in UX, MSAL.js, MSAL on mobile, and Blazor WebAssembly token flows are out of scope; the BFF in the sample uses server-side OIDC ([`docs/sample-setup.md`](./docs/sample-setup.md), [learn.microsoft.com/aspnet/core/blazor/security/server](https://learn.microsoft.com/aspnet/core/blazor/security/server)).
+- **Not a UI / client-side guide.** Browser sign-in UX, MSAL.js, MSAL on mobile, and Blazor WebAssembly token flows are out of scope; the API gateway in the sample validates browser-issued bearer tokens (in-browser Auth Code + PKCE is performed client-side by the Scalar UI), it does not run a server-side cookie session ([`docs/sample-setup.md`](./docs/sample-setup.md), [learn.microsoft.com/aspnet/core/blazor/security/server](https://learn.microsoft.com/aspnet/core/blazor/security/server)).
 - **Not an IdP implementation guide.** This guide consumes Entra; it does not document how to build one (no OpenIddict, no IdentityServer, no Keycloak deployment).
 - **Not Azure AD Connect / hybrid identity.** Directory sync, AD FS migration, password hash sync, and seamless SSO are out of scope ([learn.microsoft.com/entra/identity/hybrid](https://learn.microsoft.com/entra/identity/hybrid)).
 - **Not compliance mapping (FedRAMP / HIPAA / PCI-DSS / SOC 2).** The guide names the Entra-level controls; mapping them to a specific control framework is downstream.

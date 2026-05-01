@@ -104,7 +104,7 @@ Optional Entra access-token claim added when configured via an [optional claims 
 
 ### Managed Identity (MI) — system-assigned (SAMI), user-assigned (UAMI)
 
-Azure-platform-issued service principal automatically rotated by the platform, accessible from inside Azure compute via the IMDS endpoint. **System-assigned** is bound 1:1 to a single resource lifecycle; **user-assigned** is a standalone resource that can be attached to many compute instances. Default credential for any code running on Azure compute; this sample uses UAMI uniformly. [Managed identities overview](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview), [System- vs user-assigned](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/managed-identities-faq).
+Azure-platform-issued service principal automatically rotated by the platform, accessible from inside Azure compute via the IMDS endpoint. **System-assigned** is bound 1:1 to a single resource lifecycle; **user-assigned** is a standalone resource that can be attached to many compute instances. Default credential for any code running on Azure compute. **In this sample**: the four runtime container apps each use a *system-assigned* MI (one per app, lifecycle-bound), while the GitHub Actions CD identity is a *user-assigned* MI per env (`ftgo-{env}-cd-mi`) so it can outlive any single resource. [Managed identities overview](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview), [System- vs user-assigned](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/managed-identities-faq).
 
 ### Microsoft.Identity.Web
 
