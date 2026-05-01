@@ -1,4 +1,3 @@
-using Ftgo.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,11 +5,11 @@ namespace Ftgo.Restaurants.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Restaurants.Read.All")]
-[RequireClientApp]
 public sealed class RestaurantsController : ControllerBase
 {
+    /// <summary>App-only multi-tenant endpoint. Bound to the <see cref="RestaurantsAuthorizationPolicies.App"/> named policy.</summary>
     [HttpGet("system")]
+    [Authorize(Policy = RestaurantsAuthorizationPolicies.App)]
     public IActionResult System() => Ok(new
     {
         service = "Ftgo.Restaurants.Api",

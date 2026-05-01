@@ -1,4 +1,5 @@
 using Ftgo.Auth;
+using Ftgo.Restaurants.Api;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,16 @@ builder.Services.AddEntraAuthProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
+
+// Doctrine: app-only multi-tenant resource API. One named policy combining
+// (a) Restaurants.Read.All app-role, (b) azp allow-list, (c) rejection of any token
+// that also carries `scp`. Never use [Authorize(Roles=...)] when MapInboundClaims=false —
+// the framework looks for ClaimTypes.Role, not the short `roles` name Entra emits.
+// See eng-guide ch02 §10 / decision-trees.md Tree 4.
+builder.Services.AddAuthorization(o =>
+{
+    o.AddAppPolicy(RestaurantsAuthorizationPolicies.App, "Restaurants.Read.All");
+});
 
 builder.Services.AddEntraAuthRateLimiter();
 builder.Services.AddEntraAuthForwardedHeaders();
