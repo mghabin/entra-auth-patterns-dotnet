@@ -26,10 +26,10 @@ WHAT_IF=1 ENV=dev IMAGE_TAG=preview ./scripts/provision-apps.sh
 
 Behavior:
 
-* **Cold env** (no kitchen container app yet): previews the cold
+- **Cold env** (no kitchen container app yet): previews the cold
   `azure.bicep` deploy and exits. The tenant + wire steps depend on
   ACA-derived values that don't exist yet, so they're skipped.
-* **Warm env**: previews the cold-skip + tenant `main.bicep` deploy
+- **Warm env**: previews the cold-skip + tenant `main.bicep` deploy
   and exits before any side effects (FIC creation, GH variable write,
   wire deploy).
 
@@ -101,7 +101,15 @@ gh workflow run cd.yml \
 ```
 
 Smoke-test polls `/health/live` for up to 180s after the deploy
-completes. If that fails, check the container app revision logs:
+completes. The canonical health-probe contract — three endpoints
+(`/health/live`, `/health/ready`, `/health/startup`), tag-filtered, mapped
+explicitly (NOT via Aspire ServiceDefaults `MapDefaultEndpoints()` which
+only exposes them in Development) — is owned by **dotnet-engineering-guide
+[ch06 §10](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/06-cloud-native.md#10-health-checks--three-endpoints-for-k8s-not-what-servicedefaults-gives-you)**.
+The smoke-test expects HTTP `200` with body `{"status":"Healthy"}` on
+`/health/live`; anything else (including `200` with `Degraded`/`Unhealthy`
+body, or any `5xx`) fails the deploy. If that fails, check the container
+app revision logs:
 
 ```bash
 az containerapp logs show \
@@ -110,35 +118,100 @@ az containerapp logs show \
   --type system --follow
 ```
 
+## CD identity (UAMI) recovery
+
+The per-env CD identity (`ftgo-{env}-cd-mi`) is a user-assigned managed
+identity created by `infra/bicep/bootstrap.bicep` and
+[`scripts/bootstrap-env.sh`](../scripts/bootstrap-env.sh). Its
+`principalId` and `clientId` are stable for the lifetime of the resource
+— but if anyone deletes and re-creates the UAMI (manual portal action,
+RG teardown without `az group delete --no-wait` finishing the FIC
+cleanup, or running bootstrap with a fresh subscription), **both IDs
+change**, and every artefact pinned to the old IDs (the GitHub
+Environment `AZURE_CLIENT_ID`, the federated identity credential subject
+on the UAMI, any `roleAssignments` referencing the principal) becomes
+stale.
+
+Recovery procedure (per env, idempotent):
+
+1. **Rerun bootstrap** for the affected env — it is the only supported
+   creator and is safe to re-run:
+
+   ```bash
+   ./scripts/bootstrap-env.sh ENV=<env>
+   ```
+
+   This re-creates the UAMI if missing, re-asserts the federated identity
+   credential bound to `repo:OWNER/REPO:environment:<env>`, re-applies
+   `Contributor` (and on prod, `User Access Administrator`) on the RG,
+   and re-publishes the new `AZURE_CLIENT_ID` to the GitHub Environment.
+
+2. **Re-publish env wiring** so CD picks up the new identity:
+
+   ```bash
+   ./scripts/provision-apps.sh ENV=<env>
+   ```
+
+   This refreshes `vars.ENTRA_CONFIG_JSON` and re-federates the BFF ACA
+   system MI to its app reg.
+
+3. **Re-run CD** to confirm the new identity can deploy:
+
+   ```bash
+   gh workflow run cd.yml -f environment=<env>
+   ```
+
+If the FIC subject still references the *old* UAMI (visible in the
+"Federated credentials" tab on the Entra app reg) AAD will reject the
+new OIDC exchange with `AADSTS70021: No matching federated identity
+record found`. The bootstrap script removes orphan FICs on re-run; if
+the workflow still fails with that code, check that
+`bootstrap.bicep` ran to completion — the comment block at the top of
+`infra/bicep/cd-bootstrap.bicep` documents the exact assertion order.
+
 ## Provisioning a brand-new env
 
 1. Create the matching GitHub Environment (`dev`/`ppe`/`prod`) with
    the standard env vars/secrets (`AZURE_CLIENT_ID`,
    `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`).
 2. Create the federated credential on the bootstrap app reg for that
-   environment (one-time, see `infra/bicep/bootstrap.bicep`).
+   environment (one-time, see [`infra/bicep/bootstrap.bicep`](../infra/bicep/bootstrap.bicep)
+   and the wrapper [`scripts/bootstrap-env.sh`](../scripts/bootstrap-env.sh)).
 3. Run `provision-apps.sh ENV=<env> IMAGE_TAG=<tag>`.
 4. The script writes `vars.ENTRA_CONFIG_JSON` for the env so future CD
    runs are fully declarative.
 
 ## When something is on fire
 
-* **`/scalar/v1` returns AADSTS900021** — `vars.ENTRA_CONFIG_JSON` is
+- **`/scalar/v1` returns AADSTS900021** — `vars.ENTRA_CONFIG_JSON` is
   empty for that env. Re-run `provision-apps.sh ENV=<env>` to populate.
-* **CD smoke-test fails after a successful deploy** — check container
+- **CD smoke-test fails after a successful deploy** — check container
   app logs (above); 180s should be enough for cold-start, but image
   pull from a new registry can be slower.
-* **Ruleset drift alert** — open `.github/rulesets/main.json`,
+- **Ruleset drift alert** — open `.github/rulesets/main.json`,
   reconcile against the failure diff in the workflow log, commit a fix,
   then apply manually using the `gh api` snippet in the
   "Branch protection (Repository Rulesets)" section above.
-* **CD `build-images` fails with Trivy CRITICAL/HIGH** — open the SARIF
+- **CD `build-images` fails with Trivy CRITICAL/HIGH** — open the SARIF
   upload in the Security tab to see the CVE list. Fix order:
   bump the base image (Dockerfile FROM tag) and let Dependabot's
   docker ecosystem PR land, OR rebuild after upstream pushes a fix.
   Unfixable CVEs are already filtered (`ignore-unfixed: true`); a
   failure means there *is* a fix available somewhere in the dep tree.
-* **CD aborts with "Refusing to deploy unattested images"** — image was
+- **CD aborts with "Refusing to deploy unattested images"** — image was
   pushed before the SLSA provenance pipeline was added, or the
   attestation got pruned. Re-run `cd.yml`'s `build-images` job to
   rebuild and re-attest.
+
+## Sources
+
+- Azure CLI command reference — [learn.microsoft.com/cli/azure/reference-index](https://learn.microsoft.com/cli/azure/reference-index)
+- `az containerapp logs show` — [learn.microsoft.com/cli/azure/containerapp/logs#az-containerapp-logs-show](https://learn.microsoft.com/cli/azure/containerapp/logs#az-containerapp-logs-show)
+- Bicep `what-if` — preview deployments — [learn.microsoft.com/azure/azure-resource-manager/bicep/deploy-what-if](https://learn.microsoft.com/azure/azure-resource-manager/bicep/deploy-what-if)
+- Resource Manager locks (`CanNotDelete`) — [learn.microsoft.com/azure/azure-resource-manager/management/lock-resources](https://learn.microsoft.com/azure/azure-resource-manager/management/lock-resources)
+- Azure Key Vault soft-delete and purge protection — [learn.microsoft.com/azure/key-vault/general/soft-delete-overview](https://learn.microsoft.com/azure/key-vault/general/soft-delete-overview)
+- GitHub Actions — viewing workflow run logs — [docs.github.com/actions/monitoring-and-troubleshooting-workflows/using-workflow-run-logs](https://docs.github.com/actions/monitoring-and-troubleshooting-workflows/using-workflow-run-logs)
+- GitHub Repository Rulesets API — [docs.github.com/rest/repos/rules](https://docs.github.com/rest/repos/rules)
+- Workload identity federation — error reference (`AADSTS70021` etc.) — [learn.microsoft.com/entra/identity-platform/reference-error-codes](https://learn.microsoft.com/entra/identity-platform/reference-error-codes)
+- dotnet-engineering-guide ch06 §10 (canonical `/health/{live,ready,startup}` contract) — [github.com/mghabin/dotnet-engineering-guide/blob/main/docs/06-cloud-native.md#10-health-checks--three-endpoints-for-k8s-not-what-servicedefaults-gives-you](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/06-cloud-native.md#10-health-checks--three-endpoints-for-k8s-not-what-servicedefaults-gives-you)
+- infra-engineering-guide ch05 (observability — SLO-driven alerting, structured logging) — [github.com/mghabin/infra-engineering-guide/blob/main/docs/05-observability.md](https://github.com/mghabin/infra-engineering-guide/blob/main/docs/05-observability.md)

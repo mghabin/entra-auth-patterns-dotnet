@@ -26,12 +26,12 @@ Create three app registrations per env. Provisioning is declarative via the **Mi
 
 1. **ftgo-dev-bff** (single-tenant) — OIDC web client + OBO. Uses `SignedAssertionFromManagedIdentity` so it has **no stored secret/cert**. Consumes `orders.read` delegated scope.
 2. **ftgo-dev-orders-api** (single-tenant) — exposes scope `orders.read` and app role `Orders.Process`.
-3. **ftgo-dev-restaurants-api** (multi-tenant, `signInAudience: AzureADMultipleOrgs`) — exposes app role `Restaurants.Read.All`.
+3. **ftgo-dev-restaurants-api** (multi-tenant, `signInAudience: AzureADMultipleOrgs`) — exposes app role `Restaurants.Read.All`. **Why multi-tenant here** while `ftgo-dev-orders-api` stays single-tenant: the sample deliberately demonstrates *both* validation shapes side by side. Restaurants is the canonical multi-tenant SaaS resource — it forces the `AadIssuerValidator` + `tid` allow-list pattern owned by [`validation.md` §3](./validation.md#3-issuer-audience-v1-vs-v2-single-vs-multi-tenant). Orders stays single-tenant so the simpler issuer-pinned default ([`validation.md` §3 — Single-tenant](./validation.md#single-tenant)) and the `azp` allow-list ([`validation.md` §4](./validation.md#4-app-token-specific-checks)) read cleanly without multi-tenant noise. The architectural rationale lives in those sections; this page only declares which app reg demonstrates which.
 
 `Ftgo.Kitchen.Worker` has **no app registration** — it authenticates as its system-assigned Container App MI, which is granted `Orders.Process` directly via `permission-grants.bicep`.
 
 For each API app reg, set manifest `requestedAccessTokenVersion = 2` so
-`aud` is the API's client ID GUID.
+`aud` is the API's client ID GUID. v1 vs v2 trade-offs and the rules for accepting both during migration are owned by [`validation.md` §3 — Token versions](./validation.md#token-versions); **prefer v2** for all new apps.
 
 ## Permissions / role grants
 
@@ -99,3 +99,13 @@ dotnet run --project src/Ftgo.Kitchen.Worker
 - No local fake / TestKit (per scope decision — see `run-locally.md` for the free real-tenant path).
 - No SPA / mobile client. Bring a user token (e.g. Postman + auth-code+PKCE against the BFF app reg).
 - No deployed cert / secret / non-MI-FIC workers — those patterns live in [`docs/credential-patterns/`](./credential-patterns/) for reference only.
+
+## Sources
+
+- Microsoft Entra app roles — [learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps)
+- Microsoft.Identity.Web — protected web API audience validation — [github.com/AzureAD/microsoft-identity-web/wiki/web-apis](https://github.com/AzureAD/microsoft-identity-web/wiki/web-apis)
+- Access token claims reference (`aud`, `azp`, `roles`, `scp`, `tid`) — [learn.microsoft.com/entra/identity-platform/access-token-claims-reference](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference)
+- Application manifest `requestedAccessTokenVersion` — [learn.microsoft.com/entra/identity-platform/reference-app-manifest#requestedaccesstokenversion-attribute](https://learn.microsoft.com/entra/identity-platform/reference-app-manifest#requestedaccesstokenversion-attribute)
+- Multi-tenant apps — `signInAudience` and tenant validation — [learn.microsoft.com/entra/identity-platform/howto-convert-app-to-be-multi-tenant](https://learn.microsoft.com/entra/identity-platform/howto-convert-app-to-be-multi-tenant)
+- App-registration naming and least-privilege guidance — [learn.microsoft.com/entra/identity-platform/security-best-practices-for-app-registration](https://learn.microsoft.com/entra/identity-platform/security-best-practices-for-app-registration)
+- dotnet-engineering-guide ch02 §10 (auth doctrine — `scp` vs `roles` vs `azp`) — [github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz)

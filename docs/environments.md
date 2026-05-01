@@ -27,6 +27,23 @@ push → build-images (matrix × 7) → tags :sha-XXX, :latest
 - `workflow_dispatch` accepts an `imageTag` input to redeploy a previously-built SHA without rebuilding.
 - `cancel-in-progress: false` on ppe/prod so a follow-up push never interrupts a running deploy.
 
+> **Single-digest implication.** Because the *same* image digest flows
+> dev → ppe → prod, a regression caught in dev **blocks ppe and prod
+> for the same SHA**. There is no "skip dev, ship a hotfix straight to
+> prod" path — by design, prod can only ever run an image that ppe ran
+> and ppe can only ever run one that dev ran. Plan rollbacks
+> accordingly: `gh workflow run cd.yml -f environment=prod -f imageTag=sha-<known-good>`
+> reuses an *older* digest that already passed all three envs; it does
+> **not** re-build. Avoid making "trivial" prod-only doc/config changes
+> in CD config without bumping the SHA — they will not deploy until
+> dev rebuilds.
+
+## Why ppe has no human gate
+
+- **dev → ppe is automatic on dev success; only prod requires a reviewer.** The trade-off is **deliberate**: ppe exists to surface regressions that only appear against production-shaped infra (real ACA cold-start, real LAW ingestion, real Entra app-reg quotas) **before** a human is asked to approve prod. Inserting a human between dev and ppe just means ppe lags dev — and an out-of-date ppe catches **fewer** real issues, not more.
+- **prod is the gate that matters.** A bad SHA reaching ppe is a paged on-call event for the deploy team; a bad SHA reaching prod is a customer-impacting incident. Spending the human-review budget on the *one* hop where the blast radius justifies it is a deliberate **speed-vs-risk** allocation.
+- **Adjust per organisation.** If your org's ppe carries data subject to compliance review (HIPAA, FedRAMP), or is shared with external partners, add a required reviewer on the `ppe` GitHub Environment too — `bootstrap-env.sh` accepts a reviewer list per env. The default in this sample assumes ppe is internal-only.
+
 ## Per-env configuration
 
 What lives where:
@@ -69,3 +86,13 @@ gh api -X DELETE repos/OWNER/REPO/environments/dev
 ```
 
 The federated credential and the user-assigned MI go away with the resource group.
+
+## Sources
+
+- GitHub Actions — using environments for deployment — [docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment](https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment)
+- GitHub Actions — environment protection rules (required reviewers, wait timers) — [docs.github.com/actions/deployment/targeting-different-environments/managing-environments-for-deployment#environment-protection-rules](https://docs.github.com/actions/deployment/targeting-different-environments/managing-environments-for-deployment#environment-protection-rules)
+- GitHub Actions — concurrency — [docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs)
+- Container image digests vs tags (immutable promotion) — [docs.docker.com/reference/cli/docker/image/pull/#pull-an-image-by-digest-immutable-identifier](https://docs.docker.com/reference/cli/docker/image/pull/#pull-an-image-by-digest-immutable-identifier)
+- Progressive delivery patterns — [martinfowler.com/articles/cd-pipeline-patterns.html](https://martinfowler.com/articles/cd-pipeline-patterns.html)
+- Blue/Green deployment (Fowler) — [martinfowler.com/bliki/BlueGreenDeployment.html](https://martinfowler.com/bliki/BlueGreenDeployment.html)
+- infra-engineering-guide ch03 (CI/CD — progressive delivery, blue/green & canary) — [github.com/mghabin/infra-engineering-guide/blob/main/docs/03-ci-cd.md](https://github.com/mghabin/infra-engineering-guide/blob/main/docs/03-ci-cd.md)

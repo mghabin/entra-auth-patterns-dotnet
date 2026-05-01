@@ -60,7 +60,9 @@ The workflow auto-deploys to dev. Watch progress under **Actions → CD → depl
 
 ## Provisioning per-env Entra app registrations
 
-The CD identity is intentionally scoped to ARM only (no Microsoft Graph). Entra app regs and the resolved env-var wiring are provisioned **out-of-band**, once per env (or whenever app regs change):
+The CD identity is intentionally scoped to ARM only (no Microsoft Graph). Entra app regs and the resolved env-var wiring are provisioned **out-of-band**, once per env (or whenever app regs change).
+
+> **"Out-of-band" means run once per env, not on every push.** The Microsoft Graph application API is rate-limited and is **not designed for per-commit churn** — re-creating app regs, FICs, and admin-consented permission grants on every CI run risks `429 Too Many Requests`, partial failures that leave half-wired tenants, and an audit trail that drowns the real changes. Source-of-truth for the *resulting* wiring is the env-level GitHub variable `ENTRA_CONFIG_JSON`, which CD reads on every push.
 
 ```bash
 ./scripts/provision-apps.sh ENV=dev
@@ -76,7 +78,13 @@ This:
 - Re-deploys `azure.bicep` with a populated `entraConfig` object — env vars now live in the bicep state, no more drift.
 - Publishes the resolved `entraConfig` JSON as the `ENTRA_CONFIG_JSON` env-level GitHub variable, so subsequent CD redeploys pass the same wiring back into bicep.
 
-After this runs once per env, every `git push origin main` fully deploys + wires the env automatically — re-running provision-apps is only needed when the Entra app regs themselves change.
+After this runs once per env, every `git push origin main` fully deploys + wires the env automatically — re-running `provision-apps.sh` is only needed when the Entra app regs themselves change.
+
+### `ENTRA_CONFIG_JSON` source-of-truth and drift
+
+- The **GitHub env variable `vars.ENTRA_CONFIG_JSON` is the source-of-truth** that flows into Bicep on every CD run. CD never reads from Entra directly.
+- `scripts/provision-apps.sh` is the **only** writer: it reconciles app regs in the tenant, then re-publishes the resolved JSON back to the env variable. Anything you change manually in the Entra portal (a redirect URI, an app role, a federated credential) is **drift** until you re-run `provision-apps.sh ENV=<env>`, which re-syncs the variable from the live tenant state.
+- **Never** hand-edit `vars.ENTRA_CONFIG_JSON` in the GitHub UI; the next provision run will overwrite it. If you must change wiring out of sequence, change it in `infra/bicep/main.bicep` (or the relevant `.bicepparam`) and re-run the script.
 
 ## Promoting to ppe and prod
 
@@ -128,3 +136,17 @@ Free-tier ceilings (per Azure subscription):
 
 - [`docs/environments.md`](environments.md) — promotion model, adding a 4th env
 - [`docs/run-locally.md`](run-locally.md) — local-dev path (not cloud)
+- [`docs/operations.md`](operations.md) — on-call runbook (CD UAMI recovery, what-if previews, env teardown)
+
+## Sources
+
+- GitHub Actions OIDC — configuring OpenID Connect in Azure — [docs.github.com/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-azure](https://docs.github.com/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-azure)
+- Azure workload identity federation (FIC) — [learn.microsoft.com/entra/workload-id/workload-identity-federation](https://learn.microsoft.com/entra/workload-id/workload-identity-federation)
+- Azure RBAC — built-in roles — [learn.microsoft.com/azure/role-based-access-control/built-in-roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles)
+- Microsoft Graph throttling guidance (`429`) — [learn.microsoft.com/graph/throttling](https://learn.microsoft.com/graph/throttling)
+- Azure Container Apps — managed identities — [learn.microsoft.com/azure/container-apps/managed-identity](https://learn.microsoft.com/azure/container-apps/managed-identity)
+- SLSA — supply-chain levels for software artifacts — [slsa.dev/spec/v1.0/levels](https://slsa.dev/spec/v1.0/levels)
+- Sigstore / cosign — keyless signing and attestation — [docs.sigstore.dev/cosign/overview](https://docs.sigstore.dev/cosign/overview)
+- GitHub artifact attestations — [docs.github.com/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds)
+- infra-engineering-guide ch03 (CI/CD — pinned actions, OIDC over secrets, SLSA/Sigstore) — [github.com/mghabin/infra-engineering-guide/blob/main/docs/03-ci-cd.md](https://github.com/mghabin/infra-engineering-guide/blob/main/docs/03-ci-cd.md)
+- infra-engineering-guide ch06 (security & supply chain — workload identity, no static credentials) — [github.com/mghabin/infra-engineering-guide/blob/main/docs/06-security-supply-chain.md#3-workload-identity--the-no-static-credentials-rule](https://github.com/mghabin/infra-engineering-guide/blob/main/docs/06-security-supply-chain.md#3-workload-identity--the-no-static-credentials-rule)
