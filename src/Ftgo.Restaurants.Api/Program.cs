@@ -9,11 +9,17 @@ builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
 
+builder.Services.AddEntraAuthRateLimiter();
+builder.Services.AddEntraAuthForwardedHeaders();
+
 var app = builder.Build();
+app.UseForwardedHeaders();
+app.UseEntraAuthSecurityHeaders();
 app.UseEntraAuthProblemDetails();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
+app.UseRateLimiter();
+app.MapControllers().RequireRateLimiting(EntraAuthRateLimiterExtensions.DefaultPolicyName);
 app.MapOpenApi().AllowAnonymous();
 app.MapScalarApiReference().AllowAnonymous();
 app.MapEntraAuthHealthChecks();

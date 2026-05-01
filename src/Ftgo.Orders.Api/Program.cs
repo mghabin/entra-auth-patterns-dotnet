@@ -19,11 +19,17 @@ builder.Services.AddAuthorization(o =>
     o.AddAppPolicy(OrdersAuthorizationPolicies.App, "Orders.Process");
 });
 
+builder.Services.AddEntraAuthRateLimiter();
+builder.Services.AddEntraAuthForwardedHeaders();
+
 var app = builder.Build();
+app.UseForwardedHeaders();
+app.UseEntraAuthSecurityHeaders();
 app.UseEntraAuthProblemDetails();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
+app.UseRateLimiter();
+app.MapControllers().RequireRateLimiting(EntraAuthRateLimiterExtensions.DefaultPolicyName);
 app.MapOpenApi().AllowAnonymous();
 app.MapScalarApiReference().AllowAnonymous();
 app.MapEntraAuthHealthChecks();
