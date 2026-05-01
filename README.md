@@ -70,8 +70,8 @@ flowchart LR
     classDef svc fill:#e6f7ee,stroke:#2f855a,color:#22543d
 ```
 
-Three Entra app registrations per environment (`bff`, `orderservice`,
-`restaurantservice`). The kitchen worker doesn't need its own app reg —
+Three Entra app registrations per tier (`apigateway` (BFF), `orders-api`,
+`restaurants-api`). The kitchen worker doesn't need its own app reg —
 its **system-assigned** MI's service principal is granted the resource
 API's app role directly. Zero client secrets, zero certificates: BFF
 uses **Federated Identity Credential** (the
