@@ -32,8 +32,8 @@ builder.Services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSch
 {
     o.TokenValidationParameters.ValidAudiences = new[]
     {
-        "<api-app-id-guid>",          // v2 default: the API's client ID
-        "api://<api-app-id-uri>"      // v1 may use the App ID URI; include during v1↔v2 migration
+        "<api-app-id-guid>",          // v2 default: the API's client ID (GUID)
+        "api://<api-app-id-uri>"      // v1 default: the App ID URI — include both during v1↔v2 migration
     };
 });
 ```
@@ -94,7 +94,7 @@ Microsoft.Identity.Web replaces the simple `ValidIssuer` check with `IssuerValid
 - Accepts `https://login.microsoftonline.com/{tenantId}/v2.0` for **any** tenant.
 - Verifies that `tid` claim matches the issuer's tenant segment.
 
-You still need to decide **which tenants you allow**. For SaaS, store the list of customer tenants and reject others:
+You still need to decide **which tenants you allow**. For SaaS, store the list of customer tenants and reject others. The rejection contract is explicit: if `tid` is not in the allow-list (or doesn't match the issuer's tenant segment), throw `SecurityTokenInvalidIssuerException` — Microsoft.Identity.Web translates this to **HTTP 401 Unauthorized** (not 403; 403 is reserved for "authenticated but lacks permission"):
 
 ```csharp
 o.TokenValidationParameters.IssuerValidator = (issuer, token, parameters) =>
@@ -110,13 +110,14 @@ o.TokenValidationParameters.IssuerValidator = (issuer, token, parameters) =>
 
 ## 4. App-token specific checks
 
-Beyond `roles`, apply:
+Beyond the standard signature/audience/issuer/lifetime checks, an app-only endpoint enforces authorization in two layers:
 
-- **`azp` / `appid` allow-list** (primary defense) — the calling client's app ID. Maintain an allow-list of client app IDs that may call this endpoint. Don't rely solely on roles if the role is broad.
-- **No `scp` claim** — defense in depth (a true app token never has `scp`).
-- **`idtyp == "app"`** — *optional* additional signal; the claim is not always emitted, so don't rely on it as a required check.
+- **`roles` (PRIMARY — RBAC)** — the app role(s) you defined on the API and granted to the calling SP. This is the authorization decision. Configure `appRoleAssignmentRequired = true` on the API's enterprise app so Entra refuses to mint a token without an assignment. Don't assume `roles` will be present just because the token is app-only — only granted roles appear.
+- **`azp` / `appid` allow-list (SECONDARY — defense in depth)** — the calling client's app ID. Maintain an allow-list of client app IDs that may call this endpoint. This catches mis-grants where a role was assigned more broadly than intended.
+- **No `scp` claim** — additional defense in depth: a true app token never has `scp`. Reject if present.
+- **`idtyp == "app"`** — *optional* signal only; the claim is not always emitted, so **never** rely on it as a required check. Use it as a hint, not a gate.
 
-Note on `roles`: an app-only token only contains `roles` if you've defined app roles on the API and granted them to the calling SP (and `appRoleAssignmentRequired = true` is recommended). Don't assume `roles` will be present just because the token is app-only.
+Doctrine: `roles` is the authorization decision; `azp` is a circuit-breaker. Mirrors [dotnet-engineering-guide ch02 §10](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz) — separate named policies per identity model, **never** an OR-claims policy.
 
 ```csharp
 var appId = User.FindFirst("azp")?.Value      // v2
@@ -142,10 +143,10 @@ There is nothing magical to validate about MI tokens; treat them like any S2S ca
 
 - **Signing keys**: pulled from `https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration` and rotated automatically. Do not pin keys.
 - **Clock skew**: default 5 min — leave it.
-- **CAE (Continuous Access Evaluation)**: opt-in, lets Entra invalidate tokens early on conditional-access events. Microsoft.Identity.Web supports it via `WithClientCapabilities(["cp1"])` on the client and by surfacing `WWW-Authenticate: Bearer error="insufficient_claims"` from the API. Honor it.
-- **ACRS / claims challenges**: for step-up auth (e.g., MFA required for a sensitive endpoint), the API must return **401** with a `WWW-Authenticate: Bearer error="insufficient_claims", claims="<base64url-json>"` header so the client re-acquires a token satisfying the policy. Use Microsoft.Identity.Web helpers — e.g. `HttpContext.GetTokenAcquirer().ReplyForbiddenWithWwwAuthenticateHeaderAsync(...)` or build the header via `WwwAuthenticateParameters` — rather than throwing a bare exception (which won't include the `claims` parameter).
+- **CAE (Continuous Access Evaluation)**: opt-in, lets Entra invalidate tokens early on conditional-access events. Microsoft.Identity.Web supports it via `WithClientCapabilities(["cp1"])` on the client and by surfacing `WWW-Authenticate: Bearer error="insufficient_claims"` from the API per [RFC 6750 §3.1](https://www.rfc-editor.org/rfc/rfc6750#section-3.1). Honor it.
+- **ACRS / claims challenges**: for step-up auth (e.g., MFA required for a sensitive endpoint), the API must return **401** with a `WWW-Authenticate: Bearer error="insufficient_claims", claims="<base64url-json>"` header so the client re-acquires a token satisfying the policy. Format follows [RFC 6750 §3.1](https://www.rfc-editor.org/rfc/rfc6750#section-3.1); error bodies should follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457). Use Microsoft.Identity.Web helpers — e.g. `HttpContext.GetTokenAcquirer().ReplyForbiddenWithWwwAuthenticateHeaderAsync(...)` or build the header via `WwwAuthenticateParameters` — rather than throwing a bare exception (which won't include the `claims` parameter).
 - **Multi-audience APIs**: list every accepted audience in `ValidAudiences`. Never disable audience validation.
-- **Don't** disable `ValidateIssuer`, `ValidateAudience`, or `ValidateLifetime`. Ever.
+- **Must always validate** `ValidateIssuer`, `ValidateAudience`, `ValidateLifetime`, and signature. **No sanctioned exception.** If you think you need one, file an issue first — the answer is almost always "no, you have a bug elsewhere."
 
 ---
 
@@ -158,3 +159,20 @@ There is nothing magical to validate about MI tokens; treat them like any S2S ca
 - [ ] Multi-tenant: tenant allow-list enforced in `IssuerValidator`.
 - [ ] Audience set explicitly to App ID URI (and GUID during v1↔v2 migration).
 - [ ] CAE enabled if calling Entra-protected downstream APIs.
+
+---
+
+## Sources
+
+- RFC 7519 — JSON Web Token (JWT) — [rfc-editor.org/rfc/rfc7519](https://www.rfc-editor.org/rfc/rfc7519)
+- RFC 6750 — The OAuth 2.0 Authorization Framework: Bearer Token Usage — [rfc-editor.org/rfc/rfc6750](https://www.rfc-editor.org/rfc/rfc6750) (esp. §3 `WWW-Authenticate` Response Header Field)
+- RFC 9457 — Problem Details for HTTP APIs — [rfc-editor.org/rfc/rfc9457](https://www.rfc-editor.org/rfc/rfc9457)
+- OpenID Connect Core 1.0 — [openid.net/specs/openid-connect-core-1_0.html](https://openid.net/specs/openid-connect-core-1_0.html)
+- Microsoft Entra access token claims reference — [learn.microsoft.com/entra/identity-platform/access-token-claims-reference](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference)
+- Token version (`requestedAccessTokenVersion`) — [learn.microsoft.com/entra/identity-platform/access-tokens#token-formats](https://learn.microsoft.com/entra/identity-platform/access-tokens#token-formats)
+- Microsoft.Identity.Web — multi-tenant web APIs — [github.com/AzureAD/microsoft-identity-web/wiki/multi-tenant-web-apis](https://github.com/AzureAD/microsoft-identity-web/wiki/multi-tenant-web-apis)
+- Microsoft.Identity.Web — [github.com/AzureAD/microsoft-identity-web](https://github.com/AzureAD/microsoft-identity-web)
+- Continuous Access Evaluation (CAE) — [learn.microsoft.com/entra/identity/conditional-access/concept-continuous-access-evaluation](https://learn.microsoft.com/entra/identity/conditional-access/concept-continuous-access-evaluation)
+- Claims challenges, claims requests, and client capabilities — [learn.microsoft.com/entra/identity-platform/claims-challenge](https://learn.microsoft.com/entra/identity-platform/claims-challenge)
+- App roles — [learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps)
+- dotnet-engineering-guide ch02 §10 — auth doctrine — [github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz)
