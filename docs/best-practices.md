@@ -50,7 +50,7 @@ Cross-reference: see [decision-trees.md Tree 4](decision-trees.md#4-does-this-en
 
 - **must** define app roles for S2S; **must not** reuse delegated scopes for app permissions.
 - **must** grant the minimum app role to the minimum SP (the MI's SP, the worker's app reg) — least privilege.
-- **must** use separate app registrations for separate environments (dev/test/prod). **Must not** share secrets across rings.
+- **must** use separate app registrations for separate environments (local/ci/test/prod). **Must not** share secrets across rings.
 - **must** keep an explicit list of provisioned tenants for multi-tenant SaaS; provision via admin consent, deprovision on offboarding.
 
 ## Operational

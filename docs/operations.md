@@ -6,11 +6,11 @@ push-to-main → CD pipeline.
 
 ## Environments
 
-| Env  | RG (eastus)               | KV soft-delete | Purge protection | Delete lock |
-|------|---------------------------|----------------|------------------|-------------|
-| dev  | `rg-ftgo-dev-eastus`      | 7d             | off              | none        |
-| ppe  | `rg-ftgo-ppe-eastus`      | 7d             | off              | none        |
-| prod | `rg-ftgo-prod-eastus`     | 90d            | **on**           | **CanNotDelete** |
+| Env    | RG (eastus)                 | KV soft-delete   | Purge protection   | Delete lock      |
+| ------ | --------------------------- | ---------------- | ------------------ | ---------------- |
+| ci     | `rg-ftgo-ci-eastus`         | 7d               | off                | none             |
+| ppe    | `rg-ftgo-ppe-eastus`        | 7d               | off                | none             |
+| prod   | `rg-ftgo-prod-eastus`       | 90d              | **on**             | **CanNotDelete** |
 
 The prod RG has a `Microsoft.Authorization/locks` deployed with `level:
 CanNotDelete` (see `infra/bicep/azure.bicep`). Deletes — including
@@ -21,7 +21,7 @@ CanNotDelete` (see `infra/bicep/azure.bicep`). Deletes — including
 Preview a deploy without making changes:
 
 ```bash
-WHAT_IF=1 ENV=dev IMAGE_TAG=preview ./scripts/provision-apps.sh
+WHAT_IF=1 ENV=ci IMAGE_TAG=preview ./scripts/provision-apps.sh
 ```
 
 Behavior:
@@ -63,7 +63,7 @@ The drift job fails if anyone changes ruleset settings in the GitHub UI without 
 ## Nightly cost-safety
 
 `cd-cleanup.yml` runs at 03:00 UTC and scales every container app in
-`rg-ftgo-{dev,ppe}-eastus` down to `min=0 max=3`. Prod is excluded
+`rg-ftgo-{ci,ppe}-eastus` down to `min=0 max=3`. Prod is excluded
 intentionally. Manual run:
 
 ```bash
@@ -78,11 +78,11 @@ deploy re-asserts it after cleanup runs.
 
 ```bash
 # Confirm what will go
-az resource list --resource-group "rg-ftgo-dev-eastus" --query '[].name' -o tsv
+az resource list --resource-group "rg-ftgo-ci-eastus" --query '[].name' -o tsv
 
 # Delete the RG (Key Vault enters soft-delete for 7 days; same-name
 # re-provision in that window must use --recover, not create).
-az group delete --name "rg-ftgo-dev-eastus" --yes --no-wait
+az group delete --name "rg-ftgo-ci-eastus" --yes --no-wait
 ```
 
 For prod: don't. If genuinely required, this is a multi-person decision
@@ -96,7 +96,7 @@ az lock delete --name ftgo-prod-rg-delete-lock --resource-group rg-ftgo-prod-eas
 
 ```bash
 gh workflow run cd.yml \
-  -f environment=dev \
+  -f environment=ci \
   -f imageTag=$(git rev-parse --short HEAD)
 ```
 
@@ -113,8 +113,8 @@ app revision logs:
 
 ```bash
 az containerapp logs show \
-  --name ftgo-dev-apigateway-eus \
-  --resource-group rg-ftgo-dev-eastus \
+  --name ftgo-ci-apigateway-eus \
+  --resource-group rg-ftgo-ci-eastus \
   --type system --follow
 ```
 
@@ -171,7 +171,7 @@ the workflow still fails with that code, check that
 
 ## Provisioning a brand-new env
 
-1. Create the matching GitHub Environment (`dev`/`ppe`/`prod`) with
+1. Create the matching GitHub Environment (`ci`/`ppe`/`prod`) with
    the standard env vars/secrets (`AZURE_CLIENT_ID`,
    `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`).
 2. Create the federated credential on the bootstrap app reg for that

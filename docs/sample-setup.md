@@ -10,23 +10,23 @@ auth shapes are taught against recognisable, business-meaningful names.
 
 ## Projects
 
-| Project                      | Port | Auth shape demonstrated                                              |
-|------------------------------|------|----------------------------------------------------------------------|
-| `Ftgo.ApiGateway`            | 7101 | BFF: validates user tokens; calls Orders via OBO + S2S; calls Restaurants via S2S |
-| `Ftgo.Orders.Api`            | 7102 | Single-tenant resource: user (`scp=orders.read`) **or** app (`roles=Orders.Process` + `azp` allow-list) |
-| `Ftgo.Restaurants.Api`       | 7103 | Multi-tenant resource: app-only (`roles=Restaurants.Read.All`) with tenant allow-list `IssuerValidator` |
-| `Ftgo.Kitchen.Worker`        | —    | App token via **Managed Identity** (the one cloud-worker pattern that matters in 2026) |
-| `Ftgo.Auth` / `Ftgo.Auth.Client` | — | The one-line `AddEntraAuth(...)` / `AddEntraAuthClient(...)` libraries |
+| Project                          | Port   | Auth shape demonstrated                                                                                 |
+| -------------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| `Ftgo.ApiGateway`                | 7101   | BFF: validates user tokens; calls Orders via OBO + S2S; calls Restaurants via S2S                       |
+| `Ftgo.Orders.Api`                | 7102   | Single-tenant resource: user (`scp=orders.read`) **or** app (`roles=Orders.Process` + `azp` allow-list) |
+| `Ftgo.Restaurants.Api`           | 7103   | Multi-tenant resource: app-only (`roles=Restaurants.Read.All`) with tenant allow-list `IssuerValidator` |
+| `Ftgo.Kitchen.Worker`            | —      | App token via **Managed Identity** (the one cloud-worker pattern that matters in 2026)                  |
+| `Ftgo.Auth` / `Ftgo.Auth.Client` | —      | The one-line `AddEntraAuth(...)` / `AddEntraAuthClient(...)` libraries                                  |
 
 For cert / FIC / client-secret patterns, see [`docs/credential-patterns/`](./credential-patterns/) — documented as references, not deployed.
 
 ## App registrations
 
-Create three app registrations per env. Provisioning is declarative via the **Microsoft.Graph Bicep extension** at `infra/bicep/main.bicep`, run through `scripts/provision-apps.sh ENV=dev` — apps, service principals, scopes/roles and admin-consented permissions are created idempotently:
+Create three app registrations per env. Provisioning is declarative via the **Microsoft.Graph Bicep extension** at `infra/bicep/main.bicep`, run through `scripts/provision-apps.sh ENV=ci` — apps, service principals, scopes/roles and admin-consented permissions are created idempotently:
 
-1. **ftgo-dev-bff** (single-tenant) — OIDC web client + OBO. Uses `SignedAssertionFromManagedIdentity` so it has **no stored secret/cert**. Consumes `orders.read` delegated scope.
-2. **ftgo-dev-orders-api** (single-tenant) — exposes scope `orders.read` and app role `Orders.Process`.
-3. **ftgo-dev-restaurants-api** (multi-tenant, `signInAudience: AzureADMultipleOrgs`) — exposes app role `Restaurants.Read.All`. **Why multi-tenant here** while `ftgo-dev-orders-api` stays single-tenant: the sample deliberately demonstrates *both* validation shapes side by side. Restaurants is the canonical multi-tenant SaaS resource — it forces the `AadIssuerValidator` + `tid` allow-list pattern owned by [`validation.md` §3](./validation.md#3-issuer-audience-v1-vs-v2-single-vs-multi-tenant). Orders stays single-tenant so the simpler issuer-pinned default ([`validation.md` §3 — Single-tenant](./validation.md#single-tenant)) and the `azp` allow-list ([`validation.md` §4](./validation.md#4-app-token-specific-checks)) read cleanly without multi-tenant noise. The architectural rationale lives in those sections; this page only declares which app reg demonstrates which.
+1. **ftgo-ci-bff** (single-tenant) — OIDC web client + OBO. Uses `SignedAssertionFromManagedIdentity` so it has **no stored secret/cert**. Consumes `orders.read` delegated scope.
+2. **ftgo-ci-orders-api** (single-tenant) — exposes scope `orders.read` and app role `Orders.Process`.
+3. **ftgo-ci-restaurants-api** (multi-tenant, `signInAudience: AzureADMultipleOrgs`) — exposes app role `Restaurants.Read.All`. **Why multi-tenant here** while `ftgo-ci-orders-api` stays single-tenant: the sample deliberately demonstrates *both* validation shapes side by side. Restaurants is the canonical multi-tenant SaaS resource — it forces the `AadIssuerValidator` + `tid` allow-list pattern owned by [`validation.md` §3](./validation.md#3-issuer-audience-v1-vs-v2-single-vs-multi-tenant). Orders stays single-tenant so the simpler issuer-pinned default ([`validation.md` §3 — Single-tenant](./validation.md#single-tenant)) and the `azp` allow-list ([`validation.md` §4](./validation.md#4-app-token-specific-checks)) read cleanly without multi-tenant noise. The architectural rationale lives in those sections; this page only declares which app reg demonstrates which.
 
 `Ftgo.Kitchen.Worker` has **no app registration** — it authenticates as its system-assigned Container App MI, which is granted `Orders.Process` directly via `permission-grants.bicep`.
 
@@ -35,12 +35,12 @@ For each API app reg, set manifest `requestedAccessTokenVersion = 2` so
 
 ## Permissions / role grants
 
-| Caller                                | Callee                  | Permission                                                          |
-|---------------------------------------|-------------------------|---------------------------------------------------------------------|
-| ftgo-dev-bff (delegated)              | ftgo-dev-orders-api     | scope `orders.read` (admin-consented)                               |
-| ftgo-dev-bff (app)                    | ftgo-dev-orders-api     | role `Orders.Process`                                               |
-| ftgo-dev-bff (app)                    | ftgo-dev-restaurants-api| role `Restaurants.Read.All` (consented in each provisioned tenant)  |
-| Kitchen.Worker container-app MI       | ftgo-dev-orders-api     | role `Orders.Process` (granted by `permission-grants.bicep` `miAppRoleGrant`) |
+| Caller                                   | Callee                     | Permission                                                                    |
+| ---------------------------------------- | -------------------------- | ----------------------------------------------------------------------------- |
+| ftgo-ci-bff (delegated)                  | ftgo-ci-orders-api         | scope `orders.read` (admin-consented)                                         |
+| ftgo-ci-bff (app)                        | ftgo-ci-orders-api         | role `Orders.Process`                                                         |
+| ftgo-ci-bff (app)                        | ftgo-ci-restaurants-api    | role `Restaurants.Read.All` (consented in each provisioned tenant)            |
+| Kitchen.Worker container-app MI          | ftgo-ci-orders-api         | role `Orders.Process` (granted by `permission-grants.bicep` `miAppRoleGrant`) |
 
 Set `appRoleAssignmentRequired = true` on the resource APIs so only
 allow-listed callers receive `roles`.
