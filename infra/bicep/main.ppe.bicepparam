@@ -1,5 +1,5 @@
 // Entra app-reg provisioning for the cloud-PPE environment (suffixes display names with -ppe).
-// See main.dev.bicepparam for the rationale on FTGO_GATEWAY_REDIRECT_URI / FTGO_SCALAR_REDIRECT_URI.
+// See main.ci.bicepparam for the rationale on FTGO_GATEWAY_REDIRECT_URI / FTGO_SCALAR_REDIRECT_URI.
 
 using 'main.bicep'
 

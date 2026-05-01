@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/provision-apps.sh — single deployment entrypoint for cloud envs (dev|ppe|prod).
+# scripts/provision-apps.sh — single deployment entrypoint for cloud envs (ci|ppe|prod).
 #
 # Run this MANUALLY (requires Owner at root scope to write app regs + repo admin to write
 # GitHub vars) on a fresh env or whenever Entra app regs change. CD redeploys then pick
@@ -28,9 +28,9 @@
 # IMAGE_TAG: optional; defaults to `latest`.
 #
 # Usage:
-#   ./scripts/provision-apps.sh ENV=dev
-#   IMAGE_TAG=sha-abc1234 ./scripts/provision-apps.sh ENV=dev
-#   LOCATION=westeurope ./scripts/provision-apps.sh ENV=dev   # override region (default: eastus)
+#   ./scripts/provision-apps.sh ENV=ci
+#   IMAGE_TAG=sha-abc1234 ./scripts/provision-apps.sh ENV=ci
+#   LOCATION=westeurope ./scripts/provision-apps.sh ENV=ci   # override region (default: eastus)
 #   WHAT_IF=1 ./scripts/provision-apps.sh ENV=ppe   # preview only; no resource changes
 #
 # Prereqs: bash 4+, az CLI logged in, gh CLI authenticated, jq.
@@ -48,13 +48,16 @@ for arg in "$@"; do
     ENV=*)        ENV="${arg#ENV=}" ;;
     IMAGE_TAG=*)  IMAGE_TAG="${arg#IMAGE_TAG=}" ;;
     -h|--help)    sed -n '2,38p' "$0" | sed 's/^# \?//'; exit 0 ;;
-    *)            echo "unknown arg: $arg (expected ENV=dev|ppe|prod [IMAGE_TAG=...])" >&2; exit 2 ;;
+    *)            echo "unknown arg: $arg (expected ENV=ci|ppe|prod [IMAGE_TAG=...])" >&2; exit 2 ;;
   esac
 done
 
 case "$ENV" in
-  dev|ppe|prod) ;;
-  *) echo "ERROR: ENV must be one of dev|ppe|prod (got '${ENV}')." >&2; exit 2 ;;
+  ci|ppe|prod) ;;
+  dev)
+    echo "WARNING: ENV=dev is a deprecated alias for ENV=ci (renamed in env-rename PR). Translating; please update your callers." >&2
+    ENV=ci ;;
+  *) echo "ERROR: ENV must be one of ci|ppe|prod (got '${ENV}')." >&2; exit 2 ;;
 esac
 
 for tool in az jq gh; do

@@ -1,7 +1,7 @@
 # Reusable CD workflow: deploy infra/bicep/azure.bicep to a single environment.
 #
-# Called once per env (dev / ppe / prod) from cd.yml. The caller is responsible
-# for ordering (deploy-dev → deploy-ppe → deploy-prod) and for opting an env
+# Called once per env (ci / ppe / prod) from cd.yml. The caller is responsible
+# for ordering (deploy-ci → deploy-ppe → deploy-prod) and for opting an env
 # in/out via `if:`. This workflow assumes:
 #
 #   - GitHub Environment named ${{ inputs.environment }} exists with vars
@@ -18,7 +18,7 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: Target environment name (dev|ppe|prod). Used for the GitHub Environment, RG name suffix, and bicepparam file.
+        description: Target deployment-tier name (ci|ppe|prod). Used for the GitHub Environment, RG name suffix, and bicepparam file.
         required: true
         type: string
       image_tag:

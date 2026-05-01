@@ -30,13 +30,13 @@ business-capability name.
 
 ## What's in here
 
-| Service                       | Auth shape demonstrated                                |
-|-------------------------------|--------------------------------------------------------|
-| `Ftgo.ApiGateway`             | API gateway / token aggregator: client (Scalar) signs the user in via Auth Code + PKCE, gateway validates the bearer JWT and performs server-side OBO + app-only fan-out (uses `SignedAssertionFromManagedIdentity`) |
-| `Ftgo.Orders.Api`             | Single-tenant resource API (delegated **xor** app — separate named policies, never both) |
-| `Ftgo.Restaurants.Api`        | Multi-tenant resource API (app-only, tenant allow-list)|
-| `Ftgo.Kitchen.Worker`         | Worker — **Managed Identity** direct (canonical Azure pattern) |
-| `Ftgo.Auth` / `Ftgo.Auth.Client` | One-line `AddEntraAuth(...)` library              |
+| Service                          | Auth shape demonstrated                                                                                                                                                                                              |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ftgo.ApiGateway`                | API gateway / token aggregator: client (Scalar) signs the user in via Auth Code + PKCE, gateway validates the bearer JWT and performs server-side OBO + app-only fan-out (uses `SignedAssertionFromManagedIdentity`) |
+| `Ftgo.Orders.Api`                | Single-tenant resource API (delegated **xor** app — separate named policies, never both)                                                                                                                             |
+| `Ftgo.Restaurants.Api`           | Multi-tenant resource API (app-only, tenant allow-list)                                                                                                                                                              |
+| `Ftgo.Kitchen.Worker`            | Worker — **Managed Identity** direct (canonical Azure pattern)                                                                                                                                                       |
+| `Ftgo.Auth` / `Ftgo.Auth.Client` | One-line `AddEntraAuth(...)` library                                                                                                                                                                                 |
 
 For the cert / FIC-on-GitHub / client-secret patterns, see
 [`docs/credential-patterns/`](docs/credential-patterns/) — they are
@@ -50,7 +50,7 @@ flowchart LR
     User([User browser]):::external
     Entra[("Microsoft Entra ID")]:::entra
 
-    subgraph ACA["Azure Container Apps env (per env: dev / ppe / prod)"]
+    subgraph ACA["Azure Container Apps env (per tier: ci / ppe / prod)"]
         BFF["Ftgo.ApiGateway<br/>(API gateway · system-MI + FIC)"]:::svc
         Orders["Ftgo.Orders.Api<br/>(system-MI · resource API)"]:::svc
         Restaurants["Ftgo.Restaurants.Api<br/>(system-MI · multi-tenant resource API)"]:::svc
@@ -70,8 +70,8 @@ flowchart LR
     classDef svc fill:#e6f7ee,stroke:#2f855a,color:#22543d
 ```
 
-Three Entra app registrations per environment (`bff`, `orderservice`,
-`restaurantservice`). The kitchen worker doesn't need its own app reg —
+Three Entra app registrations per tier (`apigateway` (BFF), `orders-api`,
+`restaurants-api`). The kitchen worker doesn't need its own app reg —
 its **system-assigned** MI's service principal is granted the resource
 API's app role directly. Zero client secrets, zero certificates: BFF
 uses **Federated Identity Credential** (the
@@ -92,12 +92,12 @@ To run against real Entra patterns end-to-end, deploy to a free-tier cloud env (
 
 ## Deploy to the cloud
 
-Free-tier Azure Container Apps deployment with **dev → ppe → prod** promotion via GitHub Actions OIDC, image promotion by SHA, App Insights observability, zero stored client secrets:
+Free-tier Azure Container Apps deployment with **ci → ppe → prod** promotion via GitHub Actions OIDC, image promotion by SHA, App Insights observability, zero stored client secrets:
 
 ```bash
-./scripts/bootstrap-env.sh ENV=dev    # one-time: GH OIDC UAMI + RG + RPs
-git push origin main                  # auto-deploys to dev (only)
-./scripts/provision-apps.sh ENV=dev   # one-time per env (until app regs change): app regs + BFF FIC + MI grants + ENTRA_CONFIG_JSON GitHub var
+./scripts/bootstrap-env.sh ENV=ci    # one-time: GH OIDC UAMI + RG + RPs
+git push origin main                  # auto-deploys to ci (only)
+./scripts/provision-apps.sh ENV=ci   # one-time per tier (until app regs change): app regs + BFF FIC + MI grants + ENTRA_CONFIG_JSON GitHub var
 gh workflow run cd.yml -f environment=ppe   # manual promotion to ppe (auto-promotion is OFF — keeps idle cost at $0; see docs/cost-zero.md)
 ```
 
@@ -146,11 +146,11 @@ Full set of decision trees → [`docs/decision-trees.md`](docs/decision-trees.md
 
 ## Library cheat-sheet
 
-| Library | Best for | Notes |
-|---|---|---|
-| **Microsoft.Identity.Web** | ASP.NET Core APIs / web apps | Wraps MSAL + JwtBearer; handles validation, OBO, token cache. Default choice for ASP.NET Core. |
-| **MSAL.NET** (`Microsoft.Identity.Client`) | Non-ASP.NET hosts (workers, libraries) needing Entra-specific features (OBO, claims challenges, CAE, broker) | Lower-level than Microsoft.Identity.Web. |
-| **Azure.Identity** (`TokenCredential`) | Calling **Azure resources** (Storage, Key Vault, Cosmos, Service Bus, Graph via SDK, etc.) | `DefaultAzureCredential` chains MI, env, VS, CLI. Not for arbitrary OAuth flows; does not implement OBO. |
+| Library                                    | Best for                                                                                                     | Notes                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **Microsoft.Identity.Web**                 | ASP.NET Core APIs / web apps                                                                                 | Wraps MSAL + JwtBearer; handles validation, OBO, token cache. Default choice for ASP.NET Core.           |
+| **MSAL.NET** (`Microsoft.Identity.Client`) | Non-ASP.NET hosts (workers, libraries) needing Entra-specific features (OBO, claims challenges, CAE, broker) | Lower-level than Microsoft.Identity.Web.                                                                 |
+| **Azure.Identity** (`TokenCredential`)     | Calling **Azure resources** (Storage, Key Vault, Cosmos, Service Bus, Graph via SDK, etc.)                   | `DefaultAzureCredential` chains MI, env, VS, CLI. Not for arbitrary OAuth flows; does not implement OBO. |
 
 ## Contributing
 

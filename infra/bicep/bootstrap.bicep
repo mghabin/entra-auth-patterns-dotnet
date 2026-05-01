@@ -6,7 +6,7 @@ extension az
 targetScope = 'subscription'
 
 @description('Logical environment name; controls RG/MI naming and the federated subject.')
-@allowed([ 'dev', 'ppe', 'prod' ])
+@allowed([ 'ci', 'ppe', 'prod' ])
 param environmentName string
 
 @description('Azure region. Defaults to eastus (largest free quota).')

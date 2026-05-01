@@ -16,7 +16,7 @@
 # semantics upsert.
 #
 # Usage:
-#   ./scripts/bootstrap-env.sh ENV=dev
+#   ./scripts/bootstrap-env.sh ENV=ci
 #   ./scripts/bootstrap-env.sh ENV=ppe
 #   ./scripts/bootstrap-env.sh ENV=prod
 #
@@ -36,13 +36,16 @@ for arg in "$@"; do
   case "$arg" in
     ENV=*) ENV="${arg#ENV=}" ;;
     -h|--help) sed -n '2,24p' "$0" | sed 's/^# \?//'; exit 0 ;;
-    *) echo "unknown arg: $arg (expected ENV=dev|ppe|prod)" >&2; exit 2 ;;
+    *) echo "unknown arg: $arg (expected ENV=ci|ppe|prod)" >&2; exit 2 ;;
   esac
 done
 
 case "$ENV" in
-  dev|ppe|prod) ;;
-  *) echo "ERROR: ENV must be one of dev|ppe|prod (got '${ENV}')." >&2; exit 2 ;;
+  ci|ppe|prod) ;;
+  dev)
+    echo "WARNING: ENV=dev is a deprecated alias for ENV=ci (renamed in env-rename PR). Translating; please update your callers." >&2
+    ENV=ci ;;
+  *) echo "ERROR: ENV must be one of ci|ppe|prod (got '${ENV}')." >&2; exit 2 ;;
 esac
 
 for tool in az gh jq; do
@@ -157,7 +160,7 @@ Environment ${ENV} bootstrapped:
   - Federated subject:  ${FIC_SUBJECT}
 
 Next:
-  - Push to main (auto-deploys dev → ppe → prod), or
+  - Push to main (auto-deploys ci → ppe → prod), or
   - gh workflow run cd.yml -f environment=${ENV}
 ============================================================
 EOF

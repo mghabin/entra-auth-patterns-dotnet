@@ -24,7 +24,7 @@ targetScope = 'tenant'
 @maxLength(36)
 param tenantId string
 
-@description('Prefix applied to every app registration display name (e.g. "ftgo-dev" → "ftgo-dev-orders-api"). Cloud envs pass "ftgo-{env}".')
+@description('Prefix applied to every app registration display name (e.g. "ftgo-ci" → "ftgo-ci-orders-api"). Cloud envs pass "ftgo-{env}".')
 @minLength(2)
 @maxLength(24)
 param prefix string

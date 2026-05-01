@@ -50,6 +50,10 @@ Server-side façade that performs the OIDC sign-in on behalf of a browser SPA, h
 
 Entra mechanism that lets a resource API revoke or re-validate a token between issuance and expiry by responding 401 with a `claims` challenge; the client re-acquires a CAE-aware token. Long-lived (24h) tokens become safe because revocation is near-real-time. Owned in [`docs/validation.md`](./docs/validation.md) §6. [Continuous access evaluation](https://learn.microsoft.com/entra/identity/conditional-access/concept-continuous-access-evaluation).
 
+### ci (deployment tier)
+
+The first **cloud** tier in this sample's ladder (`local → ci → ppe → prod`). Auto-deployed to `rg-ftgo-ci-eastus` on every push to `main` with no human gate. The honest name for this tier is `ci` — not `dev` — because "dev" colloquially means "a developer's machine" and we already have one of those (the `local` tier). `ASPNETCORE_ENVIRONMENT=Staging` so app behaviour matches what `ppe` and `prod`'s equivalent settings will see. Idle cost ~$0/month thanks to ACA scale-to-zero. Documented in [`docs/environments.md`](./docs/environments.md).
+
 ### Conditional Access
 
 Entra policy engine that evaluates signals (user, device, location, risk, app) at sign-in time and during *CAE* re-evaluation, then grants, blocks, or steps up the session (MFA, compliant device). App developers consume CA via *ACRS* claims challenges; CA *authoring* is out of scope for this guide. [Conditional Access overview](https://learn.microsoft.com/entra/identity/conditional-access/overview).
@@ -100,6 +104,14 @@ Optional Entra access-token claim added when configured via an [optional claims 
 
 ---
 
+## L
+
+### local (deployment tier)
+
+The first tier in this sample's SDLC ladder (`local → ci → ppe → prod`). Refers to a developer's machine running the services via `dotnet run` or `docker compose`. **No Azure resources, no GitHub Environment, no CI workflow.** Configured via `appsettings.Development.json`, `dotnet user-secrets`, and `ASPNETCORE_ENVIRONMENT=Development` (which `dotnet run` sets automatically). Documented in [`docs/run-locally.md`](./docs/run-locally.md) and [`docs/environments.md`](./docs/environments.md). Local code can call ci-tier APIs because `aca-stack.bicep` whitelists the well-known Azure CLI / VS Code public-client appIds on the ci tier only — see the `ciPublicClients` variable.
+
+---
+
 ## M
 
 ### Managed Identity (MI) — system-assigned (SAMI), user-assigned (UAMI)
@@ -129,6 +141,14 @@ OAuth 2.0 flow ([RFC 8693 OAuth 2.0 Token Exchange](https://www.rfc-editor.org/r
 ### OIDC (OpenID Connect)
 
 Identity layer on top of OAuth 2.0 ([RFC 6749](https://www.rfc-editor.org/rfc/rfc6749)) defined in [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html). Standardises the *id_token* (a JWT identifying the user), the `userinfo` endpoint, and discovery (`/.well-known/openid-configuration`). Entra implements the OIDC v1.0 and v2.0 endpoints.
+
+---
+
+## P
+
+### ppe (Pre-Production Environment)
+
+Microsoft jargon for the deployment tier between `ci` and `prod`, sometimes called "staging" or "preprod" in other organisations. Manual-only (`workflow_dispatch`), promoted from a `ci`-blessed image digest. Used for soak testing, partner integration, and cross-tenant validation before promoting to `prod`. `ASPNETCORE_ENVIRONMENT=Staging`. Origin: the Microsoft Office / Azure Engineering convention.
 
 ---
 

@@ -6,11 +6,11 @@ push-to-main → CD pipeline.
 
 ## Environments
 
-| Env  | RG (eastus)               | KV soft-delete | Purge protection | Delete lock |
-|------|---------------------------|----------------|------------------|-------------|
-| dev  | `rg-ftgo-dev-eastus`      | 7d             | off              | none        |
-| ppe  | `rg-ftgo-ppe-eastus`      | 7d             | off              | none        |
-| prod | `rg-ftgo-prod-eastus`     | 90d            | **on**           | **CanNotDelete** |
+| Env    | RG (eastus)                 | KV soft-delete   | Purge protection   | Delete lock      |
+| ------ | --------------------------- | ---------------- | ------------------ | ---------------- |
+| ci     | `rg-ftgo-ci-eastus`         | 7d               | off                | none             |
+| ppe    | `rg-ftgo-ppe-eastus`        | 7d               | off                | none             |
+| prod   | `rg-ftgo-prod-eastus`       | 90d              | **on**             | **CanNotDelete** |
 
 The prod RG has a `Microsoft.Authorization/locks` deployed with `level:
 CanNotDelete` (see `infra/bicep/azure.bicep`). Deletes — including
@@ -21,7 +21,7 @@ CanNotDelete` (see `infra/bicep/azure.bicep`). Deletes — including
 Preview a deploy without making changes:
 
 ```bash
-WHAT_IF=1 ENV=dev IMAGE_TAG=preview ./scripts/provision-apps.sh
+WHAT_IF=1 ENV=ci IMAGE_TAG=preview ./scripts/provision-apps.sh
 ```
 
 Behavior:
@@ -63,7 +63,7 @@ The drift job fails if anyone changes ruleset settings in the GitHub UI without 
 ## Nightly cost-safety
 
 `cd-cleanup.yml` runs at 03:00 UTC and scales every container app in
-`rg-ftgo-{dev,ppe}-eastus` down to `min=0 max=3`. Prod is excluded
+`rg-ftgo-{ci,ppe}-eastus` down to `min=0 max=3`. Prod is excluded
 intentionally. Manual run:
 
 ```bash
@@ -78,11 +78,11 @@ deploy re-asserts it after cleanup runs.
 
 ```bash
 # Confirm what will go
-az resource list --resource-group "rg-ftgo-dev-eastus" --query '[].name' -o tsv
+az resource list --resource-group "rg-ftgo-ci-eastus" --query '[].name' -o tsv
 
 # Delete the RG (Key Vault enters soft-delete for 7 days; same-name
 # re-provision in that window must use --recover, not create).
-az group delete --name "rg-ftgo-dev-eastus" --yes --no-wait
+az group delete --name "rg-ftgo-ci-eastus" --yes --no-wait
 ```
 
 For prod: don't. If genuinely required, this is a multi-person decision
@@ -96,7 +96,7 @@ az lock delete --name ftgo-prod-rg-delete-lock --resource-group rg-ftgo-prod-eas
 
 ```bash
 gh workflow run cd.yml \
-  -f environment=dev \
+  -f environment=ci \
   -f imageTag=$(git rev-parse --short HEAD)
 ```
 
@@ -113,8 +113,8 @@ app revision logs:
 
 ```bash
 az containerapp logs show \
-  --name ftgo-dev-apigateway-eus \
-  --resource-group rg-ftgo-dev-eastus \
+  --name ftgo-ci-apigateway-eus \
+  --resource-group rg-ftgo-ci-eastus \
   --type system --follow
 ```
 
@@ -171,7 +171,7 @@ the workflow still fails with that code, check that
 
 ## Provisioning a brand-new env
 
-1. Create the matching GitHub Environment (`dev`/`ppe`/`prod`) with
+1. Create the matching GitHub Environment (`ci`/`ppe`/`prod`) with
    the standard env vars/secrets (`AZURE_CLIENT_ID`,
    `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`).
 2. Create the federated credential on the bootstrap app reg for that
@@ -180,6 +180,89 @@ the workflow still fails with that code, check that
 3. Run `provision-apps.sh ENV=<env> IMAGE_TAG=<tag>`.
 4. The script writes `vars.ENTRA_CONFIG_JSON` for the env so future CD
    runs are fully declarative.
+
+## Renaming a deployment tier (one-shot live cutover)
+
+This runbook is the **only safe order** for renaming a tier (e.g.
+`dev` → `ci`, as the `local + ci + ppe + prod` rename did). The
+non-obvious bit is OIDC: the GitHub OIDC token's `sub` claim is
+`repo:OWNER/REPO:environment:<gh-env-name>`, which is matched verbatim
+against the federated-identity-credential subject on the bootstrap
+app reg. Rename the GH environment **before** the FIC and the next
+`azure/login@…` call fails with `AADSTS70021`.
+
+Worked example: cut over from `dev` → `ci`.
+
+1. **Codebase first** (no live changes). Land the rename PR (see
+   the Phase A + B commits on `refactor/env-rename-dev-to-ci`).
+   The PR alone does **not** break the live `dev` env — it's all
+   string changes; nothing redeploys until step 5.
+1. **Provision the new tier alongside the old.** Don't tear down
+   `rg-ftgo-dev-eastus` yet — you want a fallback if the new
+   FIC misbehaves.
+
+   ```bash
+   ./scripts/bootstrap-env.sh ENV=ci
+   ./scripts/provision-apps.sh ENV=ci
+   ```
+
+   This creates `rg-ftgo-ci-eastus`, the `ci` GitHub Environment
+   with the standard env vars/secrets, and a fresh FIC with subject
+   `repo:OWNER/REPO:environment:ci`. (`ENV=dev` is still accepted as
+   a deprecated alias by both scripts — see the warning they print.)
+1. **Migrate the env-scoped GitHub variable** `ENTRA_CONFIG_JSON`
+   from `dev` to `ci`. GitHub does not let you rename env-scoped
+   variables, so:
+
+   ```bash
+   gh variable get ENTRA_CONFIG_JSON --env dev > /tmp/entra.json
+   gh variable set ENTRA_CONFIG_JSON --env ci --body "$(cat /tmp/entra.json)"
+   ```
+
+   The `appId`s inside the JSON are unchanged — the underlying app
+   regs (`ftgo-dev-apigateway`, etc.) survive the rename. Their
+   display names are cosmetic; you can rename them later via
+   `az ad app update --id <appId> --display-name ftgo-ci-…` for
+   consistency.
+1. **Smoke-test the new tier in isolation.** Trigger a
+   `workflow_dispatch` against `environment=ci`:
+
+   ```bash
+   gh workflow run cd.yml -f environment=ci
+   ```
+
+   Wait for green. Then run the **positive** Restaurants happy-path
+   probe (the test that actually proves the auth-policy fix works
+   end-to-end, not just rejects a bad token):
+
+   ```bash
+   USER_TOKEN=$(az account get-access-token \
+     --resource api://<bff-appId> \
+     --query accessToken -o tsv)
+   BFF_FQDN=$(az containerapp show -g rg-ftgo-ci-eastus \
+     -n ftgo-ci-apigateway-eus \
+     --query properties.configuration.ingress.fqdn -o tsv)
+   curl -fsS -H "Authorization: Bearer $USER_TOKEN" \
+     "https://${BFF_FQDN}/api/checkout/via-s2s-multitenant"
+   # → 200 with body proving roles=["Restaurants.Read.All"], azp=BFF appId
+   ```
+1. **Tear down the old `dev` tier** *only after* a green ci probe:
+
+   ```bash
+   az group delete --name rg-ftgo-dev-eastus --yes --no-wait
+   gh api -X DELETE repos/OWNER/REPO/environments/dev
+   ```
+
+   The dev FIC, dev UAMI, and the env-scoped `ENTRA_CONFIG_JSON`
+   variable all go away with the GH environment / RG. The
+   `provision-apps.sh ENV=dev` deprecation alias can be dropped from
+   `scripts/{bootstrap-env,provision-apps}.sh` in a follow-up PR
+   once nobody is running stale runbooks.
+
+**Rollback:** the old `dev` tier is intact through step 4. If `ci`
+fails the probe, run nothing — keep both tiers warm, debug, re-deploy
+`ci`. If `ci` is fundamentally broken, revert the rename PR; the
+`dev` env is untouched.
 
 ## When something is on fire
 

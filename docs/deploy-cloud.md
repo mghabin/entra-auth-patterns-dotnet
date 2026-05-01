@@ -1,6 +1,6 @@
 # Cloud deployment
 
-Deploys the **4 FTGO services** to **Azure Container Apps** in three environments — **dev → ppe → prod** — promoted by GitHub Actions OIDC. Zero stored client secrets, free-tier-friendly, **~$0/mo at idle** (see [`cost-zero.md`](cost-zero.md) for the full breakdown).
+Deploys the **4 FTGO services** to **Azure Container Apps** in three environments — **ci → ppe → prod** — promoted by GitHub Actions OIDC. Zero stored client secrets, free-tier-friendly, **~$0/mo at idle** (see [`cost-zero.md`](cost-zero.md) for the full breakdown).
 
 ## Architecture
 
@@ -9,7 +9,7 @@ GitHub repo (push to main)
   │
   └─ .github/workflows/cd.yml
        1. Build 4 images → ghcr.io/mghabin/ftgo-*:sha-XXX     (free, public)
-       2. Deploy dev   (OIDC, no secrets)        ← auto on push
+       2. Deploy ci   (OIDC, no secrets)        ← auto on push
        3. Promote to ppe                          ← manual `gh workflow run cd.yml -f environment=ppe`
        4. Promote to prod (required reviewer)     ← manual `gh workflow run cd.yml -f environment=prod`
 
@@ -34,7 +34,7 @@ Identity:
 Each environment needs its CD identity and GitHub Environment created **once** before the workflow can deploy. Run from a workstation logged in to Azure (Owner on the subscription) and `gh` (admin on the repo):
 
 ```bash
-./scripts/bootstrap-env.sh ENV=dev
+./scripts/bootstrap-env.sh ENV=ci
 ./scripts/bootstrap-env.sh ENV=ppe
 ./scripts/bootstrap-env.sh ENV=prod   # also configures required-reviewer rule
 ```
@@ -52,13 +52,13 @@ Re-running on an already-bootstrapped env is a no-op.
 
 ## First deploy
 
-After bootstrapping `dev`:
+After bootstrapping `ci`:
 
 ```bash
 git push origin main
 ```
 
-The workflow auto-deploys to dev. Watch progress under **Actions → CD → deploy-dev**. The job summary prints the BFF FQDN and Scalar URL.
+The workflow auto-deploys to ci. Watch progress under **Actions → CD → deploy-ci**. The job summary prints the BFF FQDN and Scalar URL.
 
 ## Provisioning per-env Entra app registrations
 
@@ -67,7 +67,7 @@ The CD identity is intentionally scoped to ARM only (no Microsoft Graph). Entra 
 > **"Out-of-band" means run once per env, not on every push.** The Microsoft Graph application API is rate-limited and is **not designed for per-commit churn** — re-creating app regs, FICs, and admin-consented permission grants on every CI run risks `429 Too Many Requests`, partial failures that leave half-wired tenants, and an audit trail that drowns the real changes. Source-of-truth for the *resulting* wiring is the env-level GitHub variable `ENTRA_CONFIG_JSON`, which CD reads on every push.
 
 ```bash
-./scripts/provision-apps.sh ENV=dev
+./scripts/provision-apps.sh ENV=ci
 ./scripts/provision-apps.sh ENV=ppe
 ./scripts/provision-apps.sh ENV=prod
 ```
@@ -76,12 +76,12 @@ This:
 
 - Cold-bootstraps `azure.bicep` if no container apps exist yet (`entraConfig={}`).
 - Reads each container app's MI principalId.
-- Runs `main.bicep` to (re-)create env-suffixed app regs (`ftgo-dev-apigateway`, ...) and grant `Orders.Process` to the kitchen-worker MI.
+- Runs `main.bicep` to (re-)create env-suffixed app regs (`ftgo-ci-apigateway`, ...) and grant `Orders.Process` to the kitchen-worker MI.
 - Federates the BFF ACA system MI to the BFF app reg (so it can mint client assertions via MI).
 - Re-deploys `azure.bicep` with a populated `entraConfig` object — env vars now live in the bicep state, no more drift.
 - Publishes the resolved `entraConfig` JSON as the `ENTRA_CONFIG_JSON` env-level GitHub variable, so subsequent CD redeploys pass the same wiring back into bicep.
 
-After this runs once per env, every `git push origin main` fully deploys + wires **dev** automatically — re-running `provision-apps.sh` is only needed when the Entra app regs themselves change. ppe and prod require a manual `gh workflow run` (see next section).
+After this runs once per tier, every `git push origin main` fully deploys + wires **ci** automatically — re-running `provision-apps.sh` is only needed when the Entra app regs themselves change. ppe and prod require a manual `gh workflow run` (see next section).
 
 ### `ENTRA_CONFIG_JSON` source-of-truth and drift
 
@@ -94,17 +94,17 @@ After this runs once per env, every `git push origin main` fully deploys + wires
 **ppe and prod are manual-only** — auto-promotion is intentionally disabled to keep idle Azure spend at ~$0/month. See [`environments.md`](environments.md#why-ppe-and-prod-are-manual) for the design rationale.
 
 ```bash
-# Promote latest dev SHA to ppe (build → deploy-dev → deploy-ppe)
+# Promote latest ci SHA to ppe (build → deploy-ci → deploy-ppe)
 gh workflow run cd.yml -f environment=ppe
 
-# Promote latest dev SHA to prod (build → deploy-dev → deploy-ppe → deploy-prod, with reviewer gate)
+# Promote latest ci SHA to prod (build → deploy-ci → deploy-ppe → deploy-prod, with reviewer gate)
 gh workflow run cd.yml -f environment=prod
 
 # Re-deploy a specific previously-built SHA (rollback path)
 gh workflow run cd.yml -f environment=prod -f imageTag=sha-abc1234
 ```
 
-The **same image digest** is promoted across envs — no rebuild between dev and prod.
+The **same image digest** is promoted across envs — no rebuild between ci and prod.
 
 ## Verification
 
@@ -116,12 +116,12 @@ Real teams verify production from telemetry, not curl-in-CI. Use:
 
 ## Cost estimate
 
-| Scenario | dev | ppe | prod | Total /mo |
-|---|---|---|---|---|
-| All envs idle (scale-to-zero, no traffic) | $0 | $0 | $0 | **$0** |
-| Dev continuously hit at low rate, ppe/prod idle | <$1 | $0 | $0 | **<$1** |
-| Prod 1 replica per service always-on (warm) | $0 | $0 | ~$3-5 | ~$3-5 |
-| Sustained 10 req/s prod (scale 1-3) | $0 | $0 | ~$15-25 | ~$15-25 |
+| Scenario                                        | ci  | ppe | prod    | Total /mo |
+| ----------------------------------------------- | --- | --- | ------- | --------- |
+| All envs idle (scale-to-zero, no traffic)       | $0  | $0  | $0      | **$0**    |
+| Dev continuously hit at low rate, ppe/prod idle | <$1 | $0  | $0      | **<$1**   |
+| Prod 1 replica per service always-on (warm)     | $0  | $0  | ~$3-5   | ~$3-5     |
+| Sustained 10 req/s prod (scale 1-3)             | $0  | $0  | ~$15-25 | ~$15-25   |
 
 The $0 idle floor relies on:
 
@@ -135,17 +135,17 @@ See [`cost-zero.md`](cost-zero.md) for the per-resource breakdown and the config
 
 ## File layout
 
-| Path | Purpose |
-|---|---|
-| `Dockerfile` | Single parameterized multi-service Dockerfile (chiseled, ~95 MB) |
-| `infra/bicep/azure.bicep` | Subscription-scope orchestrator (per-env Azure infra) |
-| `infra/bicep/azure.{env}.bicepparam` | Per-env parameters |
-| `infra/bicep/main.bicep` | Tenant-scope orchestrator (Entra app regs) |
-| `infra/bicep/main.{env}.bicepparam` | Per-env Entra app reg params |
-| `.github/workflows/cd.yml` | CD pipeline |
-| `.github/workflows/cd-cleanup.yml` | Nightly scale-reset for dev/ppe |
-| `scripts/bootstrap-env.sh` | One-time per-env bootstrap |
-| `scripts/provision-apps.sh` | Per-env Entra app provisioning |
+| Path                                 | Purpose                                                          |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| `Dockerfile`                         | Single parameterized multi-service Dockerfile (chiseled, ~95 MB) |
+| `infra/bicep/azure.bicep`            | Subscription-scope orchestrator (per-env Azure infra)            |
+| `infra/bicep/azure.{env}.bicepparam` | Per-env parameters                                               |
+| `infra/bicep/main.bicep`             | Tenant-scope orchestrator (Entra app regs)                       |
+| `infra/bicep/main.{env}.bicepparam`  | Per-env Entra app reg params                                     |
+| `.github/workflows/cd.yml`           | CD pipeline                                                      |
+| `.github/workflows/cd-cleanup.yml`   | Nightly scale-reset for ci/ppe                                   |
+| `scripts/bootstrap-env.sh`           | One-time per-env bootstrap                                       |
+| `scripts/provision-apps.sh`          | Per-env Entra app provisioning                                   |
 
 ## See also
 

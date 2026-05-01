@@ -1,4 +1,4 @@
-// Entra app-reg provisioning for the cloud-DEV environment (suffixes display names with -dev).
+// Entra app-reg provisioning for the cloud-CI environment (suffixes display names with -ci).
 //
 // The redirect URIs need to point at the BFF's ACA FQDN, which we don't know
 // until azure.bicep has finished deploying (the FQDN folds in cae.defaultDomain,
@@ -16,6 +16,6 @@ using 'main.bicep'
 
 param tenantId             = readEnvironmentVariable('AZURE_TENANT_ID')
 param prefix               = readEnvironmentVariable('FTGO_PREFIX',                'ftgo')
-param environmentName      = 'dev'
-param apiGatewayRedirectUri = readEnvironmentVariable('FTGO_GATEWAY_REDIRECT_URI', 'https://ftgo-dev-apigateway-eus.eastus.azurecontainerapps.io/signin-oidc')
-param scalarRedirectUri     = readEnvironmentVariable('FTGO_SCALAR_REDIRECT_URI',  'https://ftgo-dev-apigateway-eus.eastus.azurecontainerapps.io/scalar/v1')
+param environmentName      = 'ci'
+param apiGatewayRedirectUri = readEnvironmentVariable('FTGO_GATEWAY_REDIRECT_URI', 'https://ftgo-ci-apigateway-eus.eastus.azurecontainerapps.io/signin-oidc')
+param scalarRedirectUri     = readEnvironmentVariable('FTGO_SCALAR_REDIRECT_URI',  'https://ftgo-ci-apigateway-eus.eastus.azurecontainerapps.io/scalar/v1')

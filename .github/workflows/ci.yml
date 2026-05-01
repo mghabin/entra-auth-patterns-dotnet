@@ -126,7 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           fail=0
-          for env in dev ppe prod; do
+          for env in ci ppe prod; do
             for stem in main bootstrap azure; do
               file="infra/bicep/${stem}.${env}.bicepparam"
               [ -f "$file" ] || continue

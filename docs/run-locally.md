@@ -1,15 +1,21 @@
 # Run / develop the sample locally
 
-The sample no longer provisions a separate set of `ftgo-local-*` app
-registrations. **Local development uses your own Azure CLI / VS Code
-identity** to call the cloud-deployed APIs — exactly the pattern you'd
-use in a real project (`DefaultAzureCredential` falls through to
-`AzureCliCredential` on a laptop and to `ManagedIdentityCredential` in
-Azure, with no code change).
+`local` is the **first** tier in this sample's SDLC ladder
+(`local → ci → ppe → prod`, see [`environments.md`](./environments.md)) —
+not an afterthought. It's where every developer starts. **No Azure
+resources, no GitHub Environment, no per-developer app
+registration.** The sample does not provision a separate set of
+`ftgo-local-*` app regs because real-world local development should
+use your own Azure CLI / VS Code identity to talk to the existing
+**ci** cloud APIs — exactly the pattern you'd use in a real project
+(`DefaultAzureCredential` falls through to `AzureCliCredential` on a
+laptop and to `ManagedIdentityCredential` in Azure, with no code
+change). `ASPNETCORE_ENVIRONMENT=Development` so the local runtime
+matches the project conventions.
 
 For the full credential demos (cert, FIC, secret, MI), use the cloud
-**dev** environment — those flows are realistic only when the workload
-runs as a real service principal anyway.
+**ci** tier — those flows are realistic only when the workload runs
+as a real service principal anyway.
 
 ## You need
 
@@ -36,11 +42,11 @@ Unit tests stub all Entra interactions and run offline.
 
 ## 3. Hit the cloud APIs from your laptop
 
-After deploying the cloud **dev** env (see
+After deploying the cloud **ci** env (see
 [`deploy-cloud.md`](deploy-cloud.md)), the script
-`scripts/provision-apps.sh ENV=dev` whitelists the well-known **Azure CLI**
+`scripts/provision-apps.sh ENV=ci` whitelists the well-known **Azure CLI**
 (`04b07795-…`) and **VS Code** (`aebc6443-…`) public client IDs as
-allowed callers on `ftgo-dev-orders-api` and `ftgo-dev-restaurants-api`.
+allowed callers on `ftgo-ci-orders-api` and `ftgo-ci-restaurants-api`.
 
 > **Dev only.** ppe and prod do not whitelist these public clients —
 > they only accept tokens from the real workload identities (BFF + workers).
@@ -58,21 +64,21 @@ allowed callers on `ftgo-dev-orders-api` and `ftgo-dev-restaurants-api`.
 > Identity / FIC ([`credential-patterns/managed-identity.md`](credential-patterns/managed-identity.md),
 > [`credential-patterns/federated-identity.md`](credential-patterns/federated-identity.md)).
 > Whitelisting the Azure CLI app id (`04b07795-…`) on a resource
-> therefore **MUST** stay scoped to dev — promoting it to prod would
+> therefore **MUST** stay scoped to ci — promoting it to prod would
 > mean accepting tokens from any signed-in developer's laptop as if
 > they were the workload itself. Avoid.
 
 Acquire a user token and call the API:
 
 ```bash
-ORDERS_APPID=$(az ad app list --filter "displayName eq 'ftgo-dev-orders-api'" --query "[0].appId" -o tsv)
+ORDERS_APPID=$(az ad app list --filter "displayName eq 'ftgo-ci-orders-api'" --query "[0].appId" -o tsv)
 TOKEN=$(az account get-access-token --resource "api://${ORDERS_APPID}" --query accessToken -o tsv)
-ORDERS_FQDN=$(az containerapp show -g rg-ftgo-dev-eastus -n ftgo-dev-orders-api-eus --query properties.configuration.ingress.fqdn -o tsv)
+ORDERS_FQDN=$(az containerapp show -g rg-ftgo-ci-eastus -n ftgo-ci-orders-api-eus --query properties.configuration.ingress.fqdn -o tsv)
 
 curl -H "Authorization: Bearer $TOKEN" "https://${ORDERS_FQDN}/api/orders/system"
 ```
 
-The same pattern works for `ftgo-dev-restaurants-api`.
+The same pattern works for `ftgo-ci-restaurants-api`.
 
 ## 4. OIDC sign-in (browser flow)
 
@@ -80,7 +86,7 @@ OIDC sign-in needs a confidential client with a registered redirect URI,
 which only the deployed BFF has. Test it in the cloud:
 
 ```
-https://ftgo-dev-apigateway-eus.<random>.eastus.azurecontainerapps.io/scalar/v1
+https://ftgo-ci-apigateway-eus.<random>.eastus.azurecontainerapps.io/scalar/v1
 ```
 
 ## 5. Telemetry — Aspire Dashboard locally (optional)
@@ -102,11 +108,11 @@ service locally that you wish to export traces from.
 
 ## What about the credential demos (cert / FIC / secret / MI)?
 
-| Pattern                        | Where it's real                                                   |
-|--------------------------------|-------------------------------------------------------------------|
-| **MI** (`Ftgo.Kitchen.Worker`) | Cloud dev — runs as the Container App's system MI; calls Orders API with role `Orders.Process` |
-| **FIC** (`wi-demo.yml`)        | GitHub Actions workflow — OIDC token exchange, no stored secret   |
-| **Cert / secret**              | Documented in [`docs/credential-patterns/`](credential-patterns/) — not deployed (cert is a niche on-prem/HSM tool, secret is an anti-pattern) |
+| Pattern                          | Where it's real                                                                                                                                |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MI** (`Ftgo.Kitchen.Worker`)   | Cloud ci — runs as the Container App's system MI; calls Orders API with role `Orders.Process`                                                  |
+| **FIC** (`wi-demo.yml`)          | GitHub Actions workflow — OIDC token exchange, no stored secret                                                                                |
+| **Cert / secret**                | Documented in [`docs/credential-patterns/`](credential-patterns/) — not deployed (cert is a niche on-prem/HSM tool, secret is an anti-pattern) |
 
 The MI demo runs on every cloud deploy. The FIC demo runs on its own
 schedule via `wi-demo.yml`. Both are production-grade.
