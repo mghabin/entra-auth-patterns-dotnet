@@ -1,16 +1,16 @@
 # Cloud CD pipeline: builds the FTGO service images, pushes to GHCR, and deploys.
 #
 # TRIGGERS:
-#   - push to main         → build + deploy-dev only
+#   - push to main         → build + deploy-ci only
 #   - workflow_dispatch    → build + deploy through to chosen env:
-#         environment=dev   → dev
-#         environment=ppe   → dev → ppe
-#         environment=prod  → dev → ppe → prod  (requires reviewer on prod environment)
+#         environment=ci    → ci
+#         environment=ppe   → ci → ppe
+#         environment=prod  → ci → ppe → prod  (requires reviewer on prod environment)
 #
 # ppe and prod NEVER run on push — they require an explicit dispatch with the env input.
 #
 # Per-env deploy logic lives in the reusable workflow .github/workflows/deploy-env.yml
-# so dev/ppe/prod stay in lock-step. To change deploy behaviour for ALL envs,
+# so ci/ppe/prod stay in lock-step. To change deploy behaviour for ALL envs,
 # edit deploy-env.yml once.
 #
 # Environment GitHub vars expected per env: AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID
@@ -24,11 +24,11 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: Target environment (dev|ppe|prod). Defaults to full dev→ppe→prod chain.
+        description: Target environment (ci|ppe|prod). Defaults to full ci→ppe→prod chain.
         required: false
-        default: dev
+        default: ci
         type: choice
-        options: [dev, ppe, prod]
+        options: [ci, ppe, prod]
       imageTag:
         description: Existing image tag (e.g. sha-abc1234) to redeploy. Leave blank to build a fresh one from HEAD.
         required: false
@@ -169,12 +169,12 @@ jobs:
           fi
           echo "imageTag=${TAG}" >> "$GITHUB_OUTPUT"
 
-  deploy-dev:
+  deploy-ci:
     needs: resolve-image-tag
     if: |
       always() && needs.resolve-image-tag.result == 'success' &&
       (github.event_name == 'push' ||
-       github.event.inputs.environment == 'dev' ||
+       github.event.inputs.environment == 'ci' ||
        github.event.inputs.environment == 'ppe' ||
        github.event.inputs.environment == 'prod')
     permissions:
@@ -182,14 +182,14 @@ jobs:
       contents: read
     uses: ./.github/workflows/deploy-env.yml
     with:
-      environment: dev
+      environment: ci
       image_tag: ${{ needs.resolve-image-tag.outputs.imageTag }}
     secrets: inherit
 
   deploy-ppe:
-    needs: [resolve-image-tag, deploy-dev]
+    needs: [resolve-image-tag, deploy-ci]
     if: |
-      always() && needs.deploy-dev.result == 'success' &&
+      always() && needs.deploy-ci.result == 'success' &&
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.environment == 'ppe' ||
        github.event.inputs.environment == 'prod')

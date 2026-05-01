@@ -3,7 +3,7 @@ metadata description = 'Single Azure Container App (Consumption) with system-ass
 
 extension az
 
-@description('Container App resource name (e.g. ftgo-dev-apigateway-eus).')
+@description('Container App resource name (e.g. ftgo-ci-apigateway-eus).')
 param appName string
 
 @description('Lowercased short service name (e.g. apigateway, orderservice). Used as the container name and image suffix.')
@@ -22,19 +22,19 @@ param image string
 @secure()
 param appInsightsConnectionString string
 
-@description('Logical environment name (dev/ppe/prod). Capitalized into ASPNETCORE_ENVIRONMENT.')
+@description('Logical deployment-tier name (ci/ppe/prod). Capitalized into ASPNETCORE_ENVIRONMENT.')
 param environmentName string
 
 @description('Tags applied to the container app.')
 param tags object = {}
 
-@description('CPU cores per replica. Default 0.25 keeps dev cost-bounded; bump to 0.5+ for ppe/prod via parameter override.')
+@description('CPU cores per replica. Default 0.25 keeps ci cost-bounded; bump to 0.5+ for ppe/prod via parameter override.')
 param cpu string = '0.25'
 
-@description('Memory per replica. Default 0.5Gi keeps dev cost-bounded; bump to 1.0Gi+ for ppe/prod via parameter override.')
+@description('Memory per replica. Default 0.5Gi keeps ci cost-bounded; bump to 1.0Gi+ for ppe/prod via parameter override.')
 param memory string = '0.5Gi'
 
-@description('Maximum replicas the HTTP/CPU scaler is allowed to spin up. Default 1 caps dev at a known-tiny worst case (4 apps × 1 replica × 0.25 vCPU ≈ \$16/mo if pinned 24/7); ppe/prod should override.')
+@description('Maximum replicas the HTTP/CPU scaler is allowed to spin up. Default 1 caps ci at a known-tiny worst case (4 apps × 1 replica × 0.25 vCPU ≈ \$16/mo if pinned 24/7); ppe/prod should override.')
 @minValue(1)
 @maxValue(30)
 param maxReplicas int = 1
@@ -139,7 +139,7 @@ resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
       scale: {
         // Workers (no ingress) historically defaulted to min=1 because there's no HTTP
         // scaler to wake them on demand. That keeps a vCPU pinned 24/7 (~$2.4/mo per
-        // worker on dev tier) for a probe-once-and-exit pattern. Switching to min=0:
+        // worker on ci tier) for a probe-once-and-exit pattern. Switching to min=0:
         // the worker runs once on revision creation/update (executes the probe, exits),
         // then stays at 0 replicas until the next deploy. CPU-utilization scaler stays
         // wired so it can scale 0→N if the process ever does sustained work.

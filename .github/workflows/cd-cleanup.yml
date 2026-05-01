@@ -1,4 +1,4 @@
-# Cloud env safety net: nightly scale dev/ppe container apps to min=0/max=3 so a misconfigured
+# Cloud env safety net: nightly scale ci/ppe container apps to min=0/max=3 so a misconfigured
 # bicepparam (or manual `az` poke) can't keep instances pinned overnight and rack up bills.
 # Idempotent. Skips prod intentionally.
 name: cd-cleanup
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     # Per-matrix-env GitHub Environment so each iteration uses its own
     # AZURE_CLIENT_ID / AZURE_SUBSCRIPTION_ID vars + secrets. Without this,
-    # both dev and ppe would resolve from whatever single environment was
+    # both ci and ppe would resolve from whatever single environment was
     # hard-coded here, defeating the per-env credential separation that
     # the rest of CD relies on.
     environment: ${{ matrix.env }}
@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [dev, ppe]
+        env: [ci, ppe]
     steps:
       - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
         with:

@@ -6,7 +6,7 @@ extension az
 targetScope = 'resourceGroup'
 
 @description('Logical environment name; controls resource-group, naming, and ASPNETCORE_ENVIRONMENT.')
-@allowed([ 'dev', 'ppe', 'prod' ])
+@allowed([ 'ci', 'ppe', 'prod' ])
 param environmentName string
 
 @description('Azure region for every resource. Defaults to eastus (largest free quota).')
@@ -147,7 +147,7 @@ module kvRbac 'modules/key-vault-rbac.bicep' = {
 
 // Prod safety net: prevent accidental `az group delete` / portal-delete of the
 // entire RG. CanNotDelete still lets ARM perform in-place updates but blocks
-// destructive operations until the lock is removed. Dev/PPE intentionally have
+// destructive operations until the lock is removed. ci/PPE intentionally have
 // no lock so cd-cleanup and tear-down flows stay simple.
 resource rgDeleteLock 'Microsoft.Authorization/locks@2020-05-01' = if (environmentName == 'prod') {
   name: 'ftgo-prod-rg-delete-lock'

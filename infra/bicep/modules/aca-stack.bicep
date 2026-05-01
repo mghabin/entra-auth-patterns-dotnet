@@ -1,7 +1,7 @@
 metadata name = 'aca-stack'
 metadata description = 'Iterates over the FTGO service list and instantiates one container-app per service. Returns a key-keyed map of fqdn/principalId/name for downstream RBAC and outputs.'
 
-@description('Logical environment name (dev/ppe/prod).')
+@description('Logical deployment-tier name (ci/ppe/prod). "local" tier is not deployed and is not valid here.')
 param environmentName string
 
 @description('Azure region for the apps.')
@@ -58,12 +58,13 @@ param services array = [
 // without AzureAd:TenantId). provision-apps.sh either populates everything or sends `{}`.
 var hasEntra = contains(entraConfig, 'tenantId')
 
-// Microsoft public-client appIds — pre-registered, well-known. Whitelisted ONLY in dev so
-// developer laptops can call dev cloud APIs via DefaultAzureCredential / AzureCliCredential.
-// ppe and prod accept tokens only from real workload identities (BFF + workers).
+// Microsoft public-client appIds — pre-registered, well-known. Whitelisted ONLY in the ci
+// tier so developer laptops can call ci cloud APIs via DefaultAzureCredential /
+// AzureCliCredential while iterating against real Azure resources. ppe and prod accept
+// tokens only from real workload identities (BFF + workers).
 //   Azure CLI:          04b07795-8ddb-461a-bbee-02f9e1bf7b46
 //   Visual Studio Code: aebc6443-996d-45c2-90f0-388ff96faa56
-var devPublicClients = environmentName == 'dev' ? [
+var ciPublicClients = environmentName == 'ci' ? [
   '04b07795-8ddb-461a-bbee-02f9e1bf7b46'
   'aebc6443-996d-45c2-90f0-388ff96faa56'
 ] : []
@@ -79,12 +80,12 @@ var apiGatewayEnv = hasEntra ? [
   { name: 'DownstreamApis__Restaurants__AppPermissionScopes__0', value: 'api://${entraConfig.restaurantsApiAppId}/.default' }
 ] : []
 
-// Build OrdersApi allow-list: BFF first (index 0), then dev public clients (1..N), then
-// kitchen-worker MI clientId (last). Order is stable across envs because dev-only entries
-// only ever appear in dev.
+// Build OrdersApi allow-list: BFF first (index 0), then ci public clients (1..N), then
+// kitchen-worker MI clientId (last). Order is stable across envs because ci-only entries
+// only ever appear in the ci tier.
 var ordersApiAllowedClientsBase = hasEntra ? concat(
   [ entraConfig.bffAppId ],
-  devPublicClients,
+  ciPublicClients,
   [ entraConfig.kitchenWorkerMiClientId ]
 ) : []
 var ordersApiEnv = hasEntra ? concat([
@@ -97,7 +98,7 @@ var ordersApiEnv = hasEntra ? concat([
 
 var restaurantsApiAllowedClientsBase = hasEntra ? concat(
   [ entraConfig.bffAppId ],
-  devPublicClients
+  ciPublicClients
 ) : []
 var restaurantsApiEnv = hasEntra ? concat([
   { name: 'AzureAd__TenantId',                  value: entraConfig.tenantId }

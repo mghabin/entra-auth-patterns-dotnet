@@ -16,9 +16,9 @@ param tenantId string
 @maxLength(16)
 param prefix string = 'ftgo'
 
-@description('Logical environment name. Always suffixed onto the prefix (ftgo-dev-*, ftgo-ppe-*, ftgo-prod-*) so each env owns an isolated set of app regs.')
-@allowed([ 'dev', 'ppe', 'prod' ])
-param environmentName string = 'dev'
+@description('Logical deployment-tier name. Suffixed onto the prefix (ftgo-ci-*, ftgo-ppe-*, ftgo-prod-*) so each tier owns an isolated set of app regs. "local" is a documented fourth tier (no Azure resources) and is therefore not in this list.')
+@allowed([ 'ci', 'ppe', 'prod' ])
+param environmentName string = 'ci'
 
 @description('OIDC redirect URI registered on the BFF for local-dev sign-in.')
 param apiGatewayRedirectUri string = 'https://localhost:7101/signin-oidc'
