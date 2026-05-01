@@ -32,10 +32,10 @@ business-capability name.
 
 | Service                       | Auth shape demonstrated                                |
 |-------------------------------|--------------------------------------------------------|
-| `Ftgo.ApiGateway`             | BFF: user OIDC sign-in → OBO + S2S fan-out (uses `SignedAssertionFromManagedIdentity`) |
-| `Ftgo.Orders.Api`             | Single-tenant resource API (delegated **or** app)      |
+| `Ftgo.ApiGateway`             | API gateway / token aggregator: client (Scalar) signs the user in via Auth Code + PKCE, gateway validates the bearer JWT and performs server-side OBO + app-only fan-out (uses `SignedAssertionFromManagedIdentity`) |
+| `Ftgo.Orders.Api`             | Single-tenant resource API (delegated **xor** app — separate named policies, never both) |
 | `Ftgo.Restaurants.Api`        | Multi-tenant resource API (app-only, tenant allow-list)|
-| `Ftgo.Kitchen.Worker`         | Worker — **Managed Identity** (canonical Azure pattern)|
+| `Ftgo.Kitchen.Worker`         | Worker — **Managed Identity** direct (canonical Azure pattern) |
 | `Ftgo.Auth` / `Ftgo.Auth.Client` | One-line `AddEntraAuth(...)` library              |
 
 For the cert / FIC-on-GitHub / client-secret patterns, see
@@ -51,18 +51,19 @@ flowchart LR
     Entra[("Microsoft Entra ID")]:::entra
 
     subgraph ACA["Azure Container Apps env (per env: dev / ppe / prod)"]
-        BFF["Ftgo.ApiGateway<br/>(BFF · UAMI + FIC)"]:::svc
-        Orders["Ftgo.Orders.Api<br/>(UAMI · resource API)"]:::svc
-        Restaurants["Ftgo.Restaurants.Api<br/>(UAMI · multi-tenant resource API)"]:::svc
-        Kitchen["Ftgo.Kitchen.Worker<br/>(UAMI · MI direct)"]:::svc
+        BFF["Ftgo.ApiGateway<br/>(API gateway · system-MI + FIC)"]:::svc
+        Orders["Ftgo.Orders.Api<br/>(system-MI · resource API)"]:::svc
+        Restaurants["Ftgo.Restaurants.Api<br/>(system-MI · multi-tenant resource API)"]:::svc
+        Kitchen["Ftgo.Kitchen.Worker<br/>(system-MI · MI direct)"]:::svc
     end
 
-    User -- "1. OIDC sign-in (Auth Code + PKCE)" --> BFF
-    BFF -. "2. token exchange<br/>(SignedAssertionFromManagedIdentity)" .-> Entra
-    BFF -- "3. OBO access_token<br/>(orders.read)" --> Orders
-    BFF -- "4. app-only access_token<br/>(Restaurants.Read)" --> Restaurants
-    Kitchen -. "5. MI token request" .-> Entra
-    Kitchen -- "6. app-only access_token<br/>(Orders.Process role)" --> Orders
+    User -- "1. OIDC sign-in (Auth Code + PKCE) — client-side in Scalar UI" --> Entra
+    User -- "2. Bearer access_token" --> BFF
+    BFF -. "3. token exchange<br/>(SignedAssertionFromManagedIdentity)" .-> Entra
+    BFF -- "4. OBO access_token<br/>(orders.read)" --> Orders
+    BFF -- "5. app-only access_token<br/>(Restaurants.Read)" --> Restaurants
+    Kitchen -. "6. MI token request" .-> Entra
+    Kitchen -- "7. app-only access_token<br/>(Orders.Process role)" --> Orders
 
     classDef external fill:#eef,stroke:#669,color:#333
     classDef entra fill:#fef3c7,stroke:#a16207,color:#92400e
@@ -70,11 +71,13 @@ flowchart LR
 ```
 
 Three Entra app registrations per environment (`bff`, `orderservice`,
-`restaurantservice`). Workers don't need their own app reg — their UAMI's
-service principal is granted the resource API's app role directly. Zero
-client secrets, zero certificates: BFF uses **Federated Identity
-Credential** so Entra trusts a Managed-Identity-issued JWT in place of a
-secret; everything else is Managed Identity end-to-end.
+`restaurantservice`). The kitchen worker doesn't need its own app reg —
+its **system-assigned** MI's service principal is granted the resource
+API's app role directly. Zero client secrets, zero certificates: BFF
+uses **Federated Identity Credential** (the
+`SignedAssertionFromManagedIdentity` shape — see [glossary](glossary.md))
+so Entra trusts a Managed-Identity-issued JWT in place of a secret;
+everything else is Managed Identity end-to-end.
 
 ## Quick start
 
@@ -93,9 +96,9 @@ Free-tier Azure Container Apps deployment with **dev → ppe → prod** promotio
 
 ```bash
 ./scripts/bootstrap-env.sh ENV=dev    # one-time: GH OIDC UAMI + RG + RPs
-git push origin main                  # auto-deploys to dev
+git push origin main                  # auto-deploys to dev (only)
 ./scripts/provision-apps.sh ENV=dev   # one-time per env (until app regs change): app regs + BFF FIC + MI grants + ENTRA_CONFIG_JSON GitHub var
-gh workflow run cd.yml -f environment=ppe   # manual promotion to ppe (later, prod)
+gh workflow run cd.yml -f environment=ppe   # manual promotion to ppe (auto-promotion is OFF — keeps idle cost at $0; see docs/cost-zero.md)
 ```
 
 Costs **$0/mo at idle** (scale-to-zero) and ~$3-5/mo with prod always-on. Full guide → [`docs/deploy-cloud.md`](docs/deploy-cloud.md), promotion model → [`docs/environments.md`](docs/environments.md).
