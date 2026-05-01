@@ -16,11 +16,12 @@ namespace Ftgo.Auth;
 /// <remarks>
 /// <para>Default policy <see cref="DefaultPolicyName"/> is a sliding-window limiter:</para>
 /// <list type="bullet">
-///   <item>Authenticated: partition by <c>tid|oid</c> (Entra tenant + object id).</item>
-///   <item>Unauthenticated: partition by <c>ip|&lt;remote-ip&gt;</c>.</item>
-///   <item>100 requests per 60 seconds per partition; 429 with <c>Retry-After</c> on rejection.</item>
+///   <item>Delegated user token: partition by <c>u|tid|oid</c> (Entra tenant + object id), <see cref="EntraAuthRateLimiterOptions.PermitLimit"/> per <see cref="EntraAuthRateLimiterOptions.Window"/>.</item>
+///   <item>App-only token (service principal — `idtyp=app` or `roles` claim with no `scp`): partition by <c>a|tid|appid</c>, <see cref="EntraAuthRateLimiterOptions.AppPermitLimit"/> per window. App-only callers (gateway → downstream API, worker → API) are shared by every end-user behind that service principal, so the ceiling must be much higher than per-user.</item>
+///   <item>Unauthenticated: partition by <c>ip|&lt;remote-ip&gt;</c>, <see cref="EntraAuthRateLimiterOptions.PermitLimit"/> per window.</item>
+///   <item>429 with <c>Retry-After</c> on rejection (RFC 6585 §4 + §3).</item>
 /// </list>
-/// <para>Tune via <see cref="EntraAuthRateLimiterOptions"/>. Cite RFC 6585 §4 for the 429 status semantics.</para>
+/// <para>Tune via <see cref="EntraAuthRateLimiterOptions"/>.</para>
 /// </remarks>
 public static class EntraAuthRateLimiterExtensions
 {
@@ -48,35 +49,35 @@ public static class EntraAuthRateLimiterExtensions
                 return ValueTask.CompletedTask;
             };
 
-            rl.AddPolicy(DefaultPolicyName, ctx => RateLimitPartition.GetSlidingWindowLimiter(
-                partitionKey: PartitionKey(ctx),
-                factory: _ => new SlidingWindowRateLimiterOptions
-                {
-                    PermitLimit = opts.PermitLimit,
-                    Window = opts.Window,
-                    SegmentsPerWindow = opts.SegmentsPerWindow,
-                    QueueLimit = 0,
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    AutoReplenishment = true,
-                }));
+            rl.AddPolicy(DefaultPolicyName, ctx => BuildPartition(ctx, opts));
 
             rl.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-                RateLimitPartition.GetSlidingWindowLimiter(
-                    partitionKey: PartitionKey(ctx),
-                    factory: _ => new SlidingWindowRateLimiterOptions
-                    {
-                        PermitLimit = opts.PermitLimit,
-                        Window = opts.Window,
-                        SegmentsPerWindow = opts.SegmentsPerWindow,
-                        QueueLimit = 0,
-                        AutoReplenishment = true,
-                    }));
+                BuildPartition(ctx, opts));
         });
 
         return services;
     }
 
-    internal static string PartitionKey(HttpContext ctx)
+    private static RateLimitPartition<string> BuildPartition(HttpContext ctx, EntraAuthRateLimiterOptions opts)
+    {
+        var (key, isApp) = PartitionKeyAndKind(ctx);
+        var permits = isApp ? opts.AppPermitLimit : opts.PermitLimit;
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: key,
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = permits,
+                Window = opts.Window,
+                SegmentsPerWindow = opts.SegmentsPerWindow,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true,
+            });
+    }
+
+    /// <summary>Test-visible partition key helper. Returns <c>("u|tid|oid", false)</c> for delegated tokens,
+    /// <c>("a|tid|appid", true)</c> for app-only tokens, and <c>("ip|&lt;remote-ip&gt;", false)</c> for anonymous.</summary>
+    internal static (string Key, bool IsApp) PartitionKeyAndKind(HttpContext ctx)
     {
         var user = ctx.User;
         if (user.Identity?.IsAuthenticated == true)
@@ -87,23 +88,54 @@ public static class EntraAuthRateLimiterExtensions
             var tid = user.FindFirstValue("tid")
                        ?? user.FindFirstValue("http://schemas.microsoft.com/identity/claims/tenantid")
                        ?? "unknown-tid";
+
+            // App-only token detection. v2.0 tokens carry idtyp=app for service principals; older flows use
+            // the absence of `scp` together with a `roles` claim. Either signal => bucket by app, not user.
+            // https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference#payload-claims
+            var idtyp = user.FindFirstValue("idtyp");
+            var hasScp = user.FindFirst("scp") is not null
+                         || user.FindFirst("http://schemas.microsoft.com/identity/claims/scope") is not null;
+            var hasRoles = user.FindFirst("roles") is not null
+                           || user.FindFirst(ClaimTypes.Role) is not null;
+            var isApp = string.Equals(idtyp, "app", StringComparison.OrdinalIgnoreCase)
+                        || (!hasScp && hasRoles);
+
+            if (isApp)
+            {
+                var appid = user.FindFirstValue("azp")
+                             ?? user.FindFirstValue("appid")
+                             ?? user.FindFirstValue("http://schemas.microsoft.com/identity/claims/appid")
+                             ?? "unknown-appid";
+                return ($"a|{tid}|{appid}", true);
+            }
+
             var oid = user.FindFirstValue("oid")
                        ?? user.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
                        ?? user.FindFirstValue("sub")
                        ?? "unknown-oid";
-            return $"u|{tid}|{oid}";
+            return ($"u|{tid}|{oid}", false);
         }
         var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
-        return $"ip|{ip}";
+        return ($"ip|{ip}", false);
     }
+
+    /// <summary>Back-compat shim for tests / callers that just want the partition string.</summary>
+    internal static string PartitionKey(HttpContext ctx) => PartitionKeyAndKind(ctx).Key;
 }
 
 /// <summary>Knobs for <see cref="EntraAuthRateLimiterExtensions"/>.
-/// Defaults: 100 req / 60 s / 6-segment sliding window. Cite ASP.NET Core docs:
-/// <see href="https://learn.microsoft.com/aspnet/core/performance/rate-limit"/>.</summary>
+/// Defaults: 100 req / 60 s / 6-segment sliding window for users; 1000 req / 60 s for app-only callers.
+/// Cite ASP.NET Core docs: <see href="https://learn.microsoft.com/aspnet/core/performance/rate-limit"/>.</summary>
 public sealed class EntraAuthRateLimiterOptions
 {
+    /// <summary>Permit ceiling for a delegated-user partition (or anonymous IP partition).</summary>
     public int PermitLimit { get; set; } = 100;
+
+    /// <summary>Permit ceiling for an app-only (service-principal) partition. Defaults to 10× <see cref="PermitLimit"/>
+    /// because a single app identity often fronts many concurrent end-users (gateway → downstream API,
+    /// worker → API). Sharing the per-user budget across them would self-throttle normal traffic.</summary>
+    public int AppPermitLimit { get; set; } = 1000;
+
     public TimeSpan Window { get; set; } = TimeSpan.FromSeconds(60);
     public int SegmentsPerWindow { get; set; } = 6;
 }

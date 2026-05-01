@@ -37,7 +37,7 @@ Real-world example bills (rough order-of-magnitude, US East, Nov-2024 list price
 
 These are enforced today and **must not** be relaxed without a corresponding cost-budget update:
 
-- **Bicep**: `infra/bicep/modules/aca-app.bicep` defaults `scale.minReplicas=0` and `scale.maxReplicas=1`. Workers (`Ftgo.Kitchen.Worker`) are also `minReplicas=0` — they wake on the next message poll.
+- **Bicep**: `infra/bicep/modules/container-app.bicep` defaults `scale.minReplicas=0` and `scale.maxReplicas=maxReplicas` (parameterized — caller defaults to 1). Workers (`Ftgo.Kitchen.Worker`) are also `minReplicas=0` — they wake on the next message poll.
 - **Bicep**: `infra/bicep/modules/log-analytics.bicep` sets `properties.workspaceCapping.dailyQuotaGb=1` and `retentionInDays=30`.
 - **Bicep**: `infra/bicep/modules/key-vault.bicep` pins `sku.name='standard'` and `enableRbacAuthorization=true`.
 - **Bicep**: no `Microsoft.ContainerRegistry/registries` resource exists — pull comes from GHCR.

@@ -67,6 +67,41 @@ public sealed class EntraAuthRateLimiterTests
         key.ShouldBe("ip|203.0.113.7");
     }
 
+    [Fact]
+    public void Partition_key_buckets_app_only_token_separately_from_user_token()
+    {
+        // App-only token: idtyp=app, no scp, has roles, has azp/appid.
+        var appCtx = new DefaultHttpContext();
+        appCtx.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("tid", "tenant-1"),
+            new Claim("idtyp", "app"),
+            new Claim("azp", "service-app-1"),
+            new Claim("roles", "Orders.Process"),
+        }, authenticationType: "test"));
+
+        var appResult = EntraAuthRateLimiterExtensions.PartitionKeyAndKind(appCtx);
+        appResult.Key.ShouldBe("a|tenant-1|service-app-1");
+        appResult.IsApp.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Partition_key_treats_roles_only_token_as_app_even_without_idtyp()
+    {
+        // Older tokens without idtyp: presence of `roles` and absence of `scp` => app-only.
+        var ctx = new DefaultHttpContext();
+        ctx.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("tid", "tenant-2"),
+            new Claim("appid", "legacy-app"),
+            new Claim("roles", "Restaurants.Read"),
+        }, authenticationType: "test"));
+
+        var (key, isApp) = EntraAuthRateLimiterExtensions.PartitionKeyAndKind(ctx);
+        key.ShouldBe("a|tenant-2|legacy-app");
+        isApp.ShouldBeTrue();
+    }
+
     private static async Task<IHost> BuildHostAsync(int permitLimit)
     {
         var builder = new HostBuilder().ConfigureWebHost(web =>

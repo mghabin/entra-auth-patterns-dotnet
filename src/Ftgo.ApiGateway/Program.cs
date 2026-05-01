@@ -23,11 +23,9 @@ builder.Services.AddEntraAuthForwardedHeaders();
 
 var app = builder.Build();
 app.UseForwardedHeaders();
-app.UseEntraAuthSecurityHeaders(new EntraAuthSecurityHeaderOptions
-{
-    // BFF serves the Scalar HTML UI; loosen CSP enough for it to render but keep frame-ancestors locked.
-    ContentSecurityPolicy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
-});
+// API gateway serves the Scalar HTML UI; use the Scalar-friendly CSP preset so inline scripts/styles
+// + the in-browser Auth Code + PKCE call to login.microsoftonline.com are not blocked.
+app.UseEntraAuthSecurityHeaders(EntraAuthSecurityHeaderOptions.ScalarFriendly());
 app.UseEntraAuthProblemDetails();
 app.UseAuthentication();
 app.UseAuthorization();

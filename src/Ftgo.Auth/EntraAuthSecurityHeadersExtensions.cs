@@ -59,10 +59,35 @@ public sealed class EntraAuthSecurityHeaderOptions
     public string StrictTransportSecurity { get; init; } = "max-age=31536000; includeSubDomains; preload";
 
     /// <summary>CSP value. Default <c>default-src 'none'; frame-ancestors 'none'</c> — appropriate for a JSON API.
-    /// HTML hosts (BFF, Scalar UI) should override.</summary>
+    /// HTML hosts (BFF, Scalar UI) should call <see cref="ScalarFriendly"/>.</summary>
     public string ContentSecurityPolicy { get; init; } = "default-src 'none'; frame-ancestors 'none'";
 
     /// <summary>Permissions-Policy value. Default disables all browser-side capabilities.</summary>
     public string PermissionsPolicy { get; init; } =
         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()";
+
+    /// <summary>CSP preset for hosts that serve the Scalar API-reference UI. Allows the inline scripts/styles
+    /// Scalar emits, the Scalar CDN bundle, and the Microsoft Entra v2.0 OAuth/OIDC endpoints
+    /// (<c>https://login.microsoftonline.com</c>) so the in-browser Auth Code + PKCE flow works.</summary>
+    /// <remarks>
+    /// Sources:
+    /// <list type="bullet">
+    ///   <item>Scalar.AspNetCore CSP guidance — <see href="https://github.com/scalar/scalar/blob/main/documentation/integrations/aspnetcore.md"/>.</item>
+    ///   <item>Microsoft identity platform v2.0 endpoints — <see href="https://learn.microsoft.com/entra/identity-platform/v2-protocols"/>.</item>
+    ///   <item>OWASP CSP cheatsheet — <see href="https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html"/>.</item>
+    /// </list>
+    /// </remarks>
+    public static EntraAuthSecurityHeaderOptions ScalarFriendly() => new()
+    {
+        ContentSecurityPolicy = string.Join(' ',
+            "default-src 'self';",
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;",
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;",
+            "img-src 'self' data: https://cdn.jsdelivr.net;",
+            "font-src 'self' data: https://cdn.jsdelivr.net;",
+            "connect-src 'self' https://login.microsoftonline.com https://cdn.jsdelivr.net;",
+            "frame-ancestors 'none';",
+            "base-uri 'self';",
+            "form-action 'self' https://login.microsoftonline.com"),
+    };
 }
