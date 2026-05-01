@@ -1,9 +1,15 @@
 {
-  "_comment": "Declarative GitHub Repository Ruleset for the default branch (main). Apply manually with `gh api -X PUT /repos/{owner}/{repo}/rulesets/{id}` (snippet in docs/operations.md). Drift detection runs in CI. Replaces the legacy classic-branch-protection JSON; rulesets are the modern API and have a much simpler drift-comparison surface.",
+  "_comment": "Declarative GitHub Repository Ruleset for the default branch (main). Apply manually with `gh api -X PUT /repos/{owner}/{repo}/rulesets/{id}` (snippet in docs/operations.md). Drift detection runs in CI. The repository administrator (actor_id 5 = the Repository Admin role) is allowed to bypass via `--admin --squash` for solo-maintainer self-merge — every external contributor still needs CODEOWNER approval, the squash-only merge_methods enforce linear history, and the strict required-status-checks list is the supply-chain gate (build-test, bicep-lint, dependency-review, CodeQL, actionlint, gitleaks, scorecard, pinact).",
   "name": "main-branch-protection",
   "target": "branch",
   "enforcement": "active",
-  "bypass_actors": [],
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    }
+  ],
   "conditions": {
     "ref_name": {
       "include": ["~DEFAULT_BRANCH"],
@@ -17,9 +23,9 @@
     {
       "type": "pull_request",
       "parameters": {
-        "required_approving_review_count": 0,
+        "required_approving_review_count": 1,
         "dismiss_stale_reviews_on_push": true,
-        "require_code_owner_review": false,
+        "require_code_owner_review": true,
         "require_last_push_approval": false,
         "required_review_thread_resolution": true,
         "required_reviewers": [],
@@ -38,7 +44,8 @@
           { "context": "Analyze (csharp)" },
           { "context": "Analyze (actions)" },
           { "context": "actionlint" },
-          { "context": "gitleaks" }
+          { "context": "gitleaks" },
+          { "context": "pinact" }
         ]
       }
     }
