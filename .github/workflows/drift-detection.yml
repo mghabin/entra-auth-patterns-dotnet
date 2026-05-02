@@ -1,0 +1,70 @@
+name: drift-detection
+
+# Weekly Bicep what-if against ci/ppe to surface infrastructure drift between
+# what main says is deployed and what's actually live in Azure. Output is a
+# job summary annotation; no auto-remediation.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  what-if:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [ci, ppe]
+    environment: ${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Azure login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id:       ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Skip if RG missing (tier never provisioned)
+        id: rg-check
+        env:
+          RG: rg-ftgo-${{ matrix.env }}-${{ vars.LOCATION || 'eastus' }}
+        run: |
+          if ! az group show --name "$RG" --only-show-errors --output none 2>/dev/null; then
+            echo "::notice title=Drift skipped::$RG does not exist; tier never provisioned."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bicep what-if
+        if: steps.rg-check.outputs.skip == 'false'
+        env:
+          RG: rg-ftgo-${{ matrix.env }}-${{ vars.LOCATION || 'eastus' }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          set -euo pipefail
+          out=$(az deployment group what-if \
+                 --resource-group "$RG" \
+                 --template-file infra/bicep/azure.bicep \
+                 --parameters infra/bicep/azure.${{ matrix.env }}.bicepparam \
+                 --no-pretty-print --result-format ResourceIdOnly 2>&1) || true
+          echo "$out"
+          if echo "$out" | grep -qE '^(\+|\-|\~|=) '; then
+            echo "::warning title=Drift detected (${{ matrix.env }})::Bicep what-if reports differences against $RG. Review the run log."
+          else
+            echo "::notice title=No drift (${{ matrix.env }})::Live state matches main."
+          fi

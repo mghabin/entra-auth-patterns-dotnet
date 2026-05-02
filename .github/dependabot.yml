@@ -28,6 +28,7 @@ updates:
         patterns:
           - "xunit*"
           - "Microsoft.NET.Test.Sdk"
+          - "Microsoft.Testing.*"
           - "NSubstitute"
           - "Shouldly"
           - "Microsoft.AspNetCore.Mvc.Testing"

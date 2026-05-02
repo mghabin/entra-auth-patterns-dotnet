@@ -42,21 +42,23 @@ builder.Services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSch
 
 ## 2. Authorization — `scp` vs `roles`
 
-| Token type | Claim | Source |
-|---|---|---|
-| User (delegated) | `scp` (space-separated) | Scopes the user consented to |
-| App (S2S) | `roles` (array) | App roles you defined on the API and granted to the client app |
+| Token type       | Claim                   | Source                                                         |
+| ---------------- | ----------------------- | -------------------------------------------------------------- |
+| User (delegated) | `scp` (space-separated) | Scopes the user consented to                                   |
+| App (S2S)        | `roles` (array)         | App roles you defined on the API and granted to the client app |
 
-Endpoint policy:
+Endpoint policy (FTGO sample):
 
 ```csharp
 [Authorize]
-[RequiredScope("Files.Read")]              // user token must carry scp=Files.Read
+[RequiredScope("orders.read")]                                 // user token must carry scp=orders.read
 public IActionResult ReadAsUser() => …
 
-[Authorize(Roles = "Tasks.Process.All")]   // app token must carry that role
+[Authorize(Policy = OrdersAuthorizationPolicies.App)]          // app token: roles=Orders.Process AND azp ∈ allow-list
 public IActionResult ProcessAsApp() => …
 ```
+
+> **Never** `[Authorize(Roles = "...")]` on a Microsoft.Identity.Web JWT scheme. Those schemes set `MapInboundClaims = false` (defense-in-depth), so the framework's role check looks for `ClaimTypes.Role` while Entra emits the role claim under the short name `roles`. The check silently fails. Always use a named policy via `AddAppPolicy(...)` — see [DOCTRINE.md § "Authorization-policy doctrine"](../DOCTRINE.md#authorization-policy-doctrine-canonical) for the canonical statement.
 
 Distinguish them in code (when an endpoint accepts both):
 
@@ -153,8 +155,8 @@ There is nothing magical to validate about MI tokens; treat them like any S2S ca
 ## 7. Quick checklist per endpoint
 
 - [ ] `[Authorize]` present.
-- [ ] `[RequiredScope]` (user) or `[Authorize(Roles=…)]` (app) — not both implicit.
-- [ ] If endpoint accepts both: explicit branching on `idtyp`/`scp`/`roles`.
+- [ ] `[RequiredScope]` (user) or `[Authorize(Policy="...")]` (app) — never `[Authorize(Roles=...)]` on a JWT scheme with `MapInboundClaims=false` (it silently no-ops; see [DOCTRINE.md](../DOCTRINE.md#authorization-policy-doctrine-canonical)).
+- [ ] Mixed-claims policies: each named policy rejects tokens that carry the *other* claim type (so a user token never satisfies an app policy and vice versa).
 - [ ] App-only endpoints additionally allow-list `azp`/`appid`.
 - [ ] Multi-tenant: tenant allow-list enforced in `IssuerValidator`.
 - [ ] Audience set explicitly to App ID URI (and GUID during v1↔v2 migration).

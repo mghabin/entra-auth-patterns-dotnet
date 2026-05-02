@@ -73,13 +73,13 @@ References: [`docs/validation.md#3-issuer-audience-v1-vs-v2-single-vs-multi-tena
 
 - Trigger: protecting a new endpoint that may be hit by signed-in users (`scp`), app-only callers (`roles` + `azp`), or both.
 - Cost of wrong call: a single OR-claims policy that lets an app-only token reach a user-only endpoint (no `azp` allow-list, no `scp` check), or a user token satisfy an app-only endpoint by carrying an unrelated `scp`. Both are real privilege-escalation bugs in production APIs. Mirrors dotnet-guide [ch02 §10](https://github.com/mghabin/dotnet-engineering-guide/blob/main/docs/02-aspnetcore.md#10-authnauthz).
-- Default per [`validation.md`](../docs/validation.md) §4 + dotnet-guide ch02 §10: **two separate named policies on two separate authorisation attributes**, never an OR-claims policy. Delegated → `[Authorize] + [RequiredScope("orders.read")]`. App-only → `[Authorize(Roles="Orders.Process")] + RequireClientApp` (azp allow-list). Both → list both attributes; each enforces its own invariants.
+- Default per [`validation.md`](../docs/validation.md) §4 + dotnet-guide ch02 §10: **two separate named policies on two separate authorisation attributes**, never an OR-claims policy. Delegated → `[Authorize] + [RequiredScope("orders.read")]`. App-only → `[Authorize(Policy = OrdersAuthorizationPolicies.App)]` (one named policy combining role + `azp` allow-list + `scp`-rejection). Both → list both attributes; each enforces its own invariants. **Never `[Authorize(Roles=...)]`** — it silently no-ops on `MapInboundClaims=false` schemes; see [DOCTRINE.md](../DOCTRINE.md#authorization-policy-doctrine-canonical).
 
 ```mermaid
 flowchart TD
     A[New protected endpoint] --> B{Caller identity model?}
     B -->|Delegated user only| C["[Authorize] + [RequiredScope(scope)]<br/>reject if roles present without scp — validation.md §4"]
-    B -->|App-only / daemon only| D["[Authorize(Roles=app-role)]<br/>+ RequireClientApp azp allow-list<br/>+ reject if scp present — validation.md §4"]
+    B -->|App-only / daemon only| D["[Authorize(Policy=*App)]<br/>via AddAppPolicy: role + azp allow-list<br/>+ reject if scp present — validation.md §4"]
     B -->|Both flows in scope| E[Two separate named policies<br/>on two separate authorizations<br/>NEVER one OR-claims policy — validation.md §4]
     C --> F[Each request: presence of scp<br/>+ specific scope value — validation.md §4]
     D --> G[Each request: presence of roles<br/>+ azp / appid in allow-list<br/>+ absence of scp — validation.md §4]

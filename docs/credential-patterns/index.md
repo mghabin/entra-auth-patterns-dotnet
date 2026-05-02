@@ -13,13 +13,13 @@ the credential type is part of the policy, not an operational detail.
 
 ## Decision matrix
 
-| Where does your workload run?               | Credential                                                                                                                                             |
-|---------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Azure (App Service, ACA, AKS, Functions, …) | **must** use [Managed Identity](managed-identity.md)                                                                                                   |
-| GitHub Actions                              | **must** use [Workload Identity Federation](federated-identity.md)                                                                                     |
-| GKE / EKS / on-prem K8s with SPIFFE / OIDC  | **must** use [Workload Identity Federation](federated-identity.md)                                                                                     |
-| On-prem service with no IdP / HSM-bound key | **should** use [Certificate](cert.md)                                                                                                                  |
-| Anything else                               | you almost certainly don't need a [client secret](client-secret.md) — see that page for the three documented exceptions; **strongly prefer** MI or FIC |
+| Where does your workload run?                 | Credential                                                                                                                                               |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Azure (App Service, ACA, AKS, Functions, …)   | **must** use [Managed Identity](managed-identity.md)                                                                                                     |
+| GitHub Actions                                | **must** use [Workload Identity Federation](federated-identity.md)                                                                                       |
+| GKE / EKS / on-prem K8s with SPIFFE / OIDC    | **must** use [Workload Identity Federation](federated-identity.md)                                                                                       |
+| On-prem service with no IdP / HSM-bound key   | **should** use [Certificate](cert.md)                                                                                                                    |
+| Anything else                                 | you almost certainly don't need a [client secret](client-secret.md) — see that page for the three documented exceptions; **strongly prefer** MI or FIC   |
 
 Cross-references:
 

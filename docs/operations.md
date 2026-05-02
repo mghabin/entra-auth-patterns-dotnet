@@ -181,17 +181,21 @@ the workflow still fails with that code, check that
 4. The script writes `vars.ENTRA_CONFIG_JSON` for the env so future CD
    runs are fully declarative.
 
-## Renaming a deployment tier (one-shot live cutover)
+## Renaming a deployment tier (template — historical example: `dev` → `ci`)
 
-This runbook is the **only safe order** for renaming a tier (e.g.
-`dev` → `ci`, as the `local + ci + ppe + prod` rename did). The
+> **Status: template, not active.** This is a generic runbook. The `dev` →
+> `ci` rename it walks through happened in **PR #103** and is **complete**
+> — current main has no `dev` tier. Reuse this procedure (substituting your
+> source/target names) if you ever need to rename another tier.
+
+This runbook is the **only safe order** for renaming a tier. The
 non-obvious bit is OIDC: the GitHub OIDC token's `sub` claim is
 `repo:OWNER/REPO:environment:<gh-env-name>`, which is matched verbatim
 against the federated-identity-credential subject on the bootstrap
 app reg. Rename the GH environment **before** the FIC and the next
 `azure/login@…` call fails with `AADSTS70021`.
 
-Worked example: cut over from `dev` → `ci`.
+Worked example (historical): cut over from `dev` → `ci`.
 
 1. **Codebase first** (no live changes). Land the rename PR (see
    the Phase A + B commits on `refactor/env-rename-dev-to-ci`).
