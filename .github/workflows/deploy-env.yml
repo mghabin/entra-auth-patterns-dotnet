@@ -46,6 +46,10 @@ on:
       apigateway_redirect:
         description: BFF OIDC redirect URI (for app-reg consent verification).
         value: ${{ jobs.deploy.outputs.apigateway_redirect }}
+    secrets:
+      AZURE_TENANT_ID:
+        description: Entra tenant id for OIDC federated login. Repo-level secret.
+        required: true
 
 permissions:
   contents: read
@@ -53,6 +57,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: ${{ inputs.environment }}
     concurrency:
       group: cd-deploy-${{ inputs.environment }}

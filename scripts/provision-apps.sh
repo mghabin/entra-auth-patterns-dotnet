@@ -1,41 +1,18 @@
 #!/usr/bin/env bash
-# scripts/provision-apps.sh — single deployment entrypoint for cloud envs (ci|ppe|prod).
-#
-# Run this MANUALLY (requires Owner at root scope to write app regs + repo admin to write
-# GitHub vars) on a fresh env or whenever Entra app regs change. CD redeploys then pick
-# up the resolved entraConfig from the GitHub env-level variable and pass it through to
-# bicep — env vars persist across pushes (no more drift).
-#
-# Workflow:
-#
-#   1. (cold only) Deploy infra/bicep/azure.bicep with entraConfig={} to create the
-#      Container Apps + system MIs. Skipped when the kitchen-worker container app
-#      already exists.
-#   2. Read each container app's system-assigned MI principalId AND resolve the BFF
-#      MI's clientId (subject of the BFF federated credential).
-#   3. Deploy infra/bicep/main.bicep at tenant scope to (re-)create the per-env Entra
-#      app registrations, grant Orders.Process to the kitchen-worker MI's principalId,
-#      AND create the BFF federated identity credential (subject = BFF MI clientId,
-#      audience = api://AzureADTokenExchange) — all declaratively via the Microsoft.Graph
-#      Bicep extension. Idempotent (matches by uniqueName).
-#   4. Resolve the kitchen-worker MI's appId (clientId), used in OrdersApi's
-#      EntraAuth__AllowedClientApps allow-list.
-#   5. Re-deploy infra/bicep/azure.bicep with a populated entraConfig object. ARM merges
-#      the env-var changes into the container app templates declaratively.
-#   6. Publish entraConfig as the ENTRA_CONFIG_JSON env-level GitHub variable so cd.yml
-#      can re-pass it on subsequent CD redeploys.
-#
-# IMAGE_TAG: optional; defaults to `latest`.
+# provision-apps.sh — single deploy entrypoint for cloud tiers (ci|ppe|prod).
+# Six-step cold/warm flow (azure → tenant → entra → wire-back). Idempotent.
+# Full procedure: docs/deploy-cloud.md.
 #
 # Usage:
 #   ./scripts/provision-apps.sh ENV=ci
 #   IMAGE_TAG=sha-abc1234 ./scripts/provision-apps.sh ENV=ci
-#   LOCATION=westeurope ./scripts/provision-apps.sh ENV=ci   # override region (default: eastus)
-#   WHAT_IF=1 ./scripts/provision-apps.sh ENV=ppe   # preview only; no resource changes
+#   LOCATION=westeurope WHAT_IF=1 ./scripts/provision-apps.sh ENV=ppe
 #
-# Prereqs: bash 4+, az CLI logged in, gh CLI authenticated, jq.
+# Prereqs: bash 4+, az CLI (Owner at root), gh CLI (repo admin), jq.
 
 set -euo pipefail
+IFS=$'\n\t'
+trap 'echo "FATAL: $(basename "$0") failed on line $LINENO" >&2; exit 1' ERR
 
 if (( BASH_VERSINFO[0] < 4 )); then
   echo "ERROR: bash 4+ required (you have ${BASH_VERSION})." >&2
@@ -47,7 +24,7 @@ for arg in "$@"; do
   case "$arg" in
     ENV=*)        ENV="${arg#ENV=}" ;;
     IMAGE_TAG=*)  IMAGE_TAG="${arg#IMAGE_TAG=}" ;;
-    -h|--help)    sed -n '2,38p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help)    sed -n '2,11p' "$0" | sed 's/^# \?//'; exit 0 ;;
     *)            echo "unknown arg: $arg (expected ENV=ci|ppe|prod [IMAGE_TAG=...])" >&2; exit 2 ;;
   esac
 done
@@ -98,7 +75,8 @@ deploy_azure_bicep() {
   # Status messages → stderr; deployment name → stdout (so caller can capture).
   local entra_config_json="$1"
   local stage="$2"
-  local name="ftgo-${ENV}-$(date -u +%Y%m%d%H%M%S)-${stage}"
+  local name
+  name="ftgo-${ENV}-$(date -u +%Y%m%d%H%M%S)-${stage}"
   echo "    deploying azure.bicep (name=$name, entraConfig=$([[ "$entra_config_json" == "{}" ]] && echo empty || echo populated))" >&2
   if [[ "${WHAT_IF:-0}" == "1" ]]; then
     echo "    WHAT_IF=1 — preview only, skipping create" >&2

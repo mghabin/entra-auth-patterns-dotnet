@@ -36,6 +36,14 @@ public static class EntraAuthRateLimiterExtensions
         var opts = new EntraAuthRateLimiterOptions();
         configure?.Invoke(opts);
 
+        var validation = new EntraAuthRateLimiterOptionsValidator().Validate(name: null, opts);
+        if (validation.Failed)
+        {
+            throw new ArgumentException(
+                $"{nameof(EntraAuthRateLimiterOptions)} is invalid: {string.Join("; ", validation.Failures ?? Array.Empty<string>())}",
+                nameof(configure));
+        }
+
         services.AddRateLimiter(rl =>
         {
             rl.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -124,18 +132,36 @@ public static class EntraAuthRateLimiterExtensions
 }
 
 /// <summary>Knobs for <see cref="EntraAuthRateLimiterExtensions"/>.
-/// Defaults: 100 req / 60 s / 6-segment sliding window for users; 1000 req / 60 s for app-only callers.
-/// Cite ASP.NET Core docs: <see href="https://learn.microsoft.com/aspnet/core/performance/rate-limit"/>.</summary>
+/// Defaults: 100 req / 60 s / 6-segment sliding window for users; 1000 req / 60 s for app-only callers.</summary>
 public sealed class EntraAuthRateLimiterOptions
 {
     /// <summary>Permit ceiling for a delegated-user partition (or anonymous IP partition).</summary>
     public int PermitLimit { get; set; } = 100;
 
     /// <summary>Permit ceiling for an app-only (service-principal) partition. Defaults to 10× <see cref="PermitLimit"/>
-    /// because a single app identity often fronts many concurrent end-users (gateway → downstream API,
-    /// worker → API). Sharing the per-user budget across them would self-throttle normal traffic.</summary>
+    /// because one service principal often fronts many end-users (gateway → downstream, worker → API).</summary>
     public int AppPermitLimit { get; set; } = 1000;
 
     public TimeSpan Window { get; set; } = TimeSpan.FromSeconds(60);
     public int SegmentsPerWindow { get; set; } = 6;
+}
+
+internal sealed class EntraAuthRateLimiterOptionsValidator : Microsoft.Extensions.Options.IValidateOptions<EntraAuthRateLimiterOptions>
+{
+    public Microsoft.Extensions.Options.ValidateOptionsResult Validate(string? name, EntraAuthRateLimiterOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var failures = new List<string>();
+        if (options.PermitLimit <= 0)
+            failures.Add($"{nameof(EntraAuthRateLimiterOptions.PermitLimit)} must be > 0 (got {options.PermitLimit}).");
+        if (options.AppPermitLimit <= 0)
+            failures.Add($"{nameof(EntraAuthRateLimiterOptions.AppPermitLimit)} must be > 0 (got {options.AppPermitLimit}).");
+        if (options.Window <= TimeSpan.Zero)
+            failures.Add($"{nameof(EntraAuthRateLimiterOptions.Window)} must be > 0 (got {options.Window}).");
+        if (options.SegmentsPerWindow <= 0)
+            failures.Add($"{nameof(EntraAuthRateLimiterOptions.SegmentsPerWindow)} must be > 0 (got {options.SegmentsPerWindow}).");
+        return failures.Count == 0
+            ? Microsoft.Extensions.Options.ValidateOptionsResult.Success
+            : Microsoft.Extensions.Options.ValidateOptionsResult.Fail(failures);
+    }
 }

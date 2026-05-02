@@ -19,7 +19,7 @@ resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsWorkspaceName
 }
 
-resource cae 'Microsoft.App/managedEnvironments@2024-10-02-preview' = {
+resource cae 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name:     name
   location: location
   tags:     tags

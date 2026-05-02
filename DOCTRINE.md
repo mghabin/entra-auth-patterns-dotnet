@@ -62,6 +62,20 @@ Everything else — language, framework, IaC, CI/CD, observability, FinOps, supp
 
 ---
 
+## Authorization-policy doctrine (canonical)
+
+Source files reference this section instead of repeating the rationale inline.
+
+**The two-named-policy rule.** Resource APIs that accept both delegated and app callers expose **two** named policies (`*Delegated` for users, `*App` for S2S) — never an `OR` policy and never a single policy that ORs `scp` with `roles`. Each policy is mutually exclusive: a token carrying both `scp` and `roles` is rejected by both. Multi-tenant app-only resources expose one `*App` policy combining the role check, the `azp` allow-list, and `scp`-rejection.
+
+**Never `[Authorize(Roles = "...")]` on Microsoft.Identity.Web JWT schemes.** Those schemes set `MapInboundClaims = false` (defense-in-depth — see `EntraAuthServiceCollectionExtensions`), so the framework's role check looks for `ClaimTypes.Role` while Entra emits the role claim under the short name `roles`. The check silently fails: depending on what other `[Authorize]` attributes are present, this either locks everyone out or — worse — locks no one out. Always use the named-policy attributes (`[Authorize(Policy = OrdersAuthorizationPolicies.App)]`).
+
+**Why `azp` allow-list is required for app tokens.** `roles` proves *what* the caller wants to do; `azp` proves *who* the caller is. Without `azp` checking, any tenant admin who consents your app's app-role to *their own* malicious client can call you. The allow-list pins the set of client appIds you trust at the workload level, not the consent level.
+
+References: dotnet-engineering-guide ch02 §10, [`docs/decision-trees.md`](./docs/decision-trees.md) Tree 4, [`docs/validation.md`](./docs/validation.md) §4.
+
+---
+
 ## Sources
 
 - Microsoft.Identity.Web — [learn.microsoft.com/entra/identity-platform/microsoft-identity-web](https://learn.microsoft.com/entra/identity-platform/microsoft-identity-web)

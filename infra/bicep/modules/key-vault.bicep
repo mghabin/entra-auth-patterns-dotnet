@@ -28,7 +28,7 @@ param softDeleteRetentionInDays int = 7
 @description('When true, the vault cannot be purged before retention expires (irreversible). Required for prod compliance; off in non-prod so churned environments do not pile up undeletable vaults.')
 param enablePurgeProtection bool = false
 
-resource kv 'Microsoft.KeyVault/vaults@2024-04-01-preview' = {
+resource kv 'Microsoft.KeyVault/vaults@2024-11-01' = {
   name:     name
   location: location
   tags:     tags

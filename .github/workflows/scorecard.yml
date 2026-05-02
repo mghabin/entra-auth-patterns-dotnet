@@ -21,6 +21,7 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       # Required for SARIF upload to code-scanning.
       security-events: write

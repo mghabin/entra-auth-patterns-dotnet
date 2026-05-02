@@ -14,6 +14,7 @@ permissions:
 jobs:
   scale-down:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Per-matrix-env GitHub Environment so each iteration uses its own
     # AZURE_CLIENT_ID / AZURE_SUBSCRIPTION_ID vars + secrets. Without this,
     # both ci and ppe would resolve from whatever single environment was

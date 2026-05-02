@@ -1,29 +1,13 @@
 #!/usr/bin/env bash
-# scripts/bootstrap-env.sh — one-time per-environment bootstrap for the cloud CD pipeline.
+# bootstrap-env.sh — one-time per-tier bootstrap (RG + UAMI + FIC + RBAC + GH env).
+# Idempotent. See docs/operations.md § "Provisioning a brand-new tier".
 #
-# Azure side  (declarative): infra/bicep/bootstrap.bicep deploys
-#   1. Resource group       rg-ftgo-${ENV}-eastus
-#   2. User-assigned MI     ftgo-${ENV}-cd-mi
-#   3. Federated credential github-${ENV}  (subject: repo:OWNER/REPO:environment:ENV)
-#   4. RBAC                 Contributor on the RG (+ User Access Admin for prod)
-#
-# GitHub side (imperative — outside Azure ARM):
-#   5. GitHub Environment   ${ENV} (with required reviewer for prod)
-#   6. GH env vars          AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID
-#   7. Repo secret          AZURE_TENANT_ID (one-time, shared across envs)
-#
-# Idempotent: safe to re-run. Bicep deployment uses deterministic names; gh PUT
-# semantics upsert.
-#
-# Usage:
-#   ./scripts/bootstrap-env.sh ENV=ci
-#   ./scripts/bootstrap-env.sh ENV=ppe
-#   ./scripts/bootstrap-env.sh ENV=prod
-#
-# Prereqs: bash 4+, az CLI logged in to the target subscription with Owner role,
-# gh CLI authenticated to the repo, jq.
+# Usage: ./scripts/bootstrap-env.sh ENV=ci|ppe|prod
+# Prereqs: bash 4+, az CLI (Owner), gh CLI, jq.
 
 set -euo pipefail
+IFS=$'\n\t'
+trap 'echo "FATAL: $(basename "$0") failed on line $LINENO" >&2; exit 1' ERR
 
 if (( BASH_VERSINFO[0] < 4 )); then
   echo "ERROR: bash 4+ required (you have ${BASH_VERSION})." >&2
@@ -35,7 +19,7 @@ ENV=""
 for arg in "$@"; do
   case "$arg" in
     ENV=*) ENV="${arg#ENV=}" ;;
-    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) sed -n '2,7p' "$0" | sed 's/^# \?//'; exit 0 ;;
     *) echo "unknown arg: $arg (expected ENV=ci|ppe|prod)" >&2; exit 2 ;;
   esac
 done
