@@ -66,16 +66,16 @@ Call them out so readers don't expect them.
 
 ## 5. "If you are X, this guide is Y for you"
 
-| Reader archetype | Recommendation |
-|---|---|
-| Staff .NET engineer at a 200-person SaaS, multi-team, cloud-native on Azure | **Primary reader.** Read [`docs/decision-trees.md`](./docs/decision-trees.md) → SCOPE → [`docs/matrix.md`](./docs/matrix.md) → [`docs/best-practices.md`](./docs/best-practices.md). |
-| Platform / auth-library owner (`EntraAuth.*` shared NuGet, multi-product) | **Primary reader.** Start at [`docs/aks-shared-infra.md`](./docs/aks-shared-infra.md), then [`docs/acquisition.md`](./docs/acquisition.md) and [`docs/validation.md`](./docs/validation.md). |
-| Architect picking credential type for a new service | **Primary reader.** [`docs/decision-trees.md`](./docs/decision-trees.md) Tree 2 + Tree 5 → [`docs/credential-patterns/index.md`](./docs/credential-patterns/index.md). |
-| Solo developer, one app, pre-PMF | **Skim only.** [`docs/run-locally.md`](./docs/run-locally.md) and [`docs/best-practices.md`](./docs/best-practices.md) are worth an hour; the platform / shared-infra chapters are premature. |
-| ASP.NET Core engineer needing JWT validation defaults only | **Targeted reader.** [`docs/validation.md`](./docs/validation.md) is the chapter; the rest is background. |
-| Mobile / SPA developer | **Wrong guide.** Read MSAL.js or MSAL mobile docs first; come back when you own a server-side .NET API. |
-| IGA / access-review engineer | **Wrong guide.** Use [Microsoft Entra ID Governance](https://learn.microsoft.com/entra/id-governance/identity-governance-overview); this guide is for app developers, not directory operators. |
-| Compliance / GRC reviewer mapping controls | **Reference, not source of truth.** Use this as the engineering-side counterpart to your control catalog; mapping work is yours. |
+| Reader archetype                                                            | Recommendation                                                                                                                                                                                 |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Staff .NET engineer at a 200-person SaaS, multi-team, cloud-native on Azure | **Primary reader.** Read [`docs/decision-trees.md`](./docs/decision-trees.md) → SCOPE → [`docs/matrix.md`](./docs/matrix.md) → [`docs/best-practices.md`](./docs/best-practices.md).           |
+| Platform / auth-library owner (`EntraAuth.*` shared NuGet, multi-product)   | **Primary reader.** Start at [`docs/aks-shared-infra.md`](./docs/aks-shared-infra.md), then [`docs/acquisition.md`](./docs/acquisition.md) and [`docs/validation.md`](./docs/validation.md).   |
+| Architect picking credential type for a new service                         | **Primary reader.** [`docs/decision-trees.md`](./docs/decision-trees.md) Tree 2 + Tree 5 → [`docs/credential-patterns/index.md`](./docs/credential-patterns/index.md).                         |
+| Solo developer, one app, pre-PMF                                            | **Skim only.** [`docs/run-locally.md`](./docs/run-locally.md) and [`docs/best-practices.md`](./docs/best-practices.md) are worth an hour; the platform / shared-infra chapters are premature.  |
+| ASP.NET Core engineer needing JWT validation defaults only                  | **Targeted reader.** [`docs/validation.md`](./docs/validation.md) is the chapter; the rest is background.                                                                                      |
+| Mobile / SPA developer                                                      | **Wrong guide.** Read MSAL.js or MSAL mobile docs first; come back when you own a server-side .NET API.                                                                                        |
+| IGA / access-review engineer                                                | **Wrong guide.** Use [Microsoft Entra ID Governance](https://learn.microsoft.com/entra/id-governance/identity-governance-overview); this guide is for app developers, not directory operators. |
+| Compliance / GRC reviewer mapping controls                                  | **Reference, not source of truth.** Use this as the engineering-side counterpart to your control catalog; mapping work is yours.                                                               |
 
 ---
 

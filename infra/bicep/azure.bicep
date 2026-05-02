@@ -42,6 +42,16 @@ param keyVaultEnablePurgeProtection bool = environmentName == 'prod'
 @maxLength(24)
 param keyVaultNameOverride string = ''
 
+@description('Monthly cost ceiling in USD. Forecasted+Actual notifications fire at 80%/100%. ci/ppe defaults are deliberately tiny (this sample is $0-idle).')
+@minValue(1)
+param monthlyBudgetUsd int = environmentName == 'prod' ? 50 : 10
+
+@description('Email recipients for budget alerts. Empty array disables email notifications. Wire from each tier bicepparam.')
+param budgetContactEmails array = []
+
+@description('First-of-month UTC start date (yyyy-MM-01). Pinned in bicepparam for reproducible deployments.')
+param budgetStartDate string = '${utcNow('yyyy-MM')}-01'
+
 // Region → short token folded into resource names. Falls back to first 3 chars for unmapped regions.
 var regionShortMap = {
   eastus:       'eus'
@@ -63,9 +73,10 @@ var kvName       = empty(keyVaultNameOverride) ? 'kv-ftgo-${environmentName}-${t
 module logAnalytics 'modules/log-analytics.bicep' = {
   name:  'law'
   params: {
-    name:     lawName
-    location: location
-    tags:     tags
+    name:             lawName
+    location:         location
+    tags:             tags
+    retentionInDays:  environmentName == 'prod' ? 90 : 30
   }
 }
 
@@ -143,6 +154,20 @@ module kvRbac 'modules/key-vault-rbac.bicep' = {
   dependsOn: [
     keyVault
   ]
+}
+
+// Cost guardrail: monthly budget on this RG. ci/ppe defaults are tiny because
+// the sample is $0-idle (ACA scale-to-zero); prod allows a higher ceiling with
+// the same Forecasted+Actual alert structure.
+module budget 'modules/budget.bicep' = {
+  name:  'budget'
+  scope: resourceGroup()
+  params: {
+    name:           'ftgo-${environmentName}-budget'
+    monthlyAmount:  monthlyBudgetUsd
+    contactEmails:  budgetContactEmails
+    startDate:      budgetStartDate
+  }
 }
 
 // Prod safety net: prevent accidental `az group delete` / portal-delete of the

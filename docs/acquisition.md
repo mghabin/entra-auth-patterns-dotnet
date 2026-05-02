@@ -2,10 +2,10 @@
 
 Two flows you ever acquire on the server:
 
-| Flow | Who is the token *for* | Claim shape | OAuth grant |
-|---|---|---|---|
-| **App token** | The calling app/workload | `roles` *(when app roles are assigned/required)*, no `scp`; `idtyp=app` may not be present (defense-in-depth only — rely on `roles` + `azp` allow-list for enforcement, see [validation.md §4 App-token specific checks](validation.md#4-app-token-specific-checks)) | `client_credentials` (or FIC assertion) |
-| **User token** | The signed-in user | `scp` (delegated scopes); identity in `oid` + `tid` (use these for decisions); `name` / `preferred_username` for display | `authorization_code` (client) → API → **OBO** for downstream |
+| Flow           | Who is the token *for*   | Claim shape                                                                                                                                                                                                                                                          | OAuth grant                                                  |
+| -------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **App token**  | The calling app/workload | `roles` *(when app roles are assigned/required)*, no `scp`; `idtyp=app` may not be present (defense-in-depth only — rely on `roles` + `azp` allow-list for enforcement, see [validation.md §4 App-token specific checks](validation.md#4-app-token-specific-checks)) | `client_credentials` (or FIC assertion)                      |
+| **User token** | The signed-in user       | `scp` (delegated scopes); identity in `oid` + `tid` (use these for decisions); `name` / `preferred_username` for display                                                                                                                                             | `authorization_code` (client) → API → **OBO** for downstream |
 
 > Rule of thumb: if there is no human in the request, you want an **app token**. If there is, propagate the user identity via **OBO**, don't fall back to an app token.
 
@@ -93,11 +93,11 @@ Same as cert but `.WithClientSecret("…")`. Rotate ≤ 6 months, store only in 
 
 ### 1e. Picking the library
 
-| You are doing… | Use |
-|---|---|
-| Calling an **Azure resource SDK** | `Azure.Identity` (`TokenCredential`) |
-| Calling **your own / a 3rd-party Entra-protected API** from a worker | `MSAL.NET` (`ConfidentialClientApplication`) |
-| Calling a downstream API **from inside an ASP.NET Core API** | `Microsoft.Identity.Web` → `ITokenAcquisition` / `IDownstreamApi` |
+| You are doing…                                                       | Use                                                               |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Calling an **Azure resource SDK**                                    | `Azure.Identity` (`TokenCredential`)                              |
+| Calling **your own / a 3rd-party Entra-protected API** from a worker | `MSAL.NET` (`ConfidentialClientApplication`)                      |
+| Calling a downstream API **from inside an ASP.NET Core API**         | `Microsoft.Identity.Web` → `ITokenAcquisition` / `IDownstreamApi` |
 
 ---
 
@@ -155,14 +155,14 @@ The credential the API uses to authenticate **itself** to the token endpoint dur
 
 ## 3. Single-tenant vs multi-tenant — at acquisition time
 
-| | Single-tenant | Multi-tenant |
-|---|---|---|
-| Authority | `https://login.microsoftonline.com/<tenantId>` | `https://login.microsoftonline.com/organizations` (work/school — default for Entra-only APIs). Only use `/common` (work + MSA) if you truly accept personal accounts and filter explicitly. |
-| App registration | `signInAudience: AzureADMyOrg` | `AzureADMultipleOrgs` (or `…AndPersonalMicrosoftAccount`) |
-| Admin consent | Once, in your tenant | Per-tenant; expose via admin-consent URL |
-| App token (`/.default`) | Issued by your tenant | Issued by the **calling tenant** — the app must be provisioned there |
-| OBO | Same-tenant | Token is issued in the **user's** home tenant; downstream must accept that issuer. The downstream API **must** enforce a `tid` allow-list via `IssuerValidator` — see [validation.md §3 Issuer & audience](validation.md#3-issuer-audience-v1-vs-v2-single-vs-multi-tenant). |
-| MI / FIC | Same | MI is per-resource in your tenant — to call into other tenants you need a **multi-tenant app reg** + cert/FIC, not raw MI |
+|                         | Single-tenant                                  | Multi-tenant                                                                                                                                                                                                                                                                 |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authority               | `https://login.microsoftonline.com/<tenantId>` | `https://login.microsoftonline.com/organizations` (work/school — default for Entra-only APIs). Only use `/common` (work + MSA) if you truly accept personal accounts and filter explicitly.                                                                                  |
+| App registration        | `signInAudience: AzureADMyOrg`                 | `AzureADMultipleOrgs` (or `…AndPersonalMicrosoftAccount`)                                                                                                                                                                                                                    |
+| Admin consent           | Once, in your tenant                           | Per-tenant; expose via admin-consent URL                                                                                                                                                                                                                                     |
+| App token (`/.default`) | Issued by your tenant                          | Issued by the **calling tenant** — the app must be provisioned there                                                                                                                                                                                                         |
+| OBO                     | Same-tenant                                    | Token is issued in the **user's** home tenant; downstream must accept that issuer. The downstream API **must** enforce a `tid` allow-list via `IssuerValidator` — see [validation.md §3 Issuer & audience](validation.md#3-issuer-audience-v1-vs-v2-single-vs-multi-tenant). |
+| MI / FIC                | Same                                           | MI is per-resource in your tenant — to call into other tenants you need a **multi-tenant app reg** + cert/FIC, not raw MI                                                                                                                                                    |
 
 Key takeaway: **MI is single-tenant by nature.** For cross-tenant S2S, use a multi-tenant app registration with a cert or FIC, or use MI to call your own multi-tenant app reg's federated credential.
 

@@ -12,6 +12,11 @@ param location string
 @description('Tags applied to the workspace.')
 param tags object = {}
 
+@description('Log retention in days. 30 covers ci/ppe ops; prod uses 90+ for the audit-log compliance floor.')
+@minValue(30)
+@maxValue(730)
+param retentionInDays int = 30
+
 resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name:     name
   location: location
@@ -20,7 +25,7 @@ resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
     sku: {
       name: 'PerGB2018'
     }
-    retentionInDays:   30
+    retentionInDays:   retentionInDays
     workspaceCapping: {
       dailyQuotaGb: 1
     }

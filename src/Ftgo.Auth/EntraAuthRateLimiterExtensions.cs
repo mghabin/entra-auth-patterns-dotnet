@@ -47,13 +47,16 @@ public static class EntraAuthRateLimiterExtensions
         services.AddRateLimiter(rl =>
         {
             rl.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            rl.OnRejected = static (ctx, _) =>
+            var fallbackRetryAfterSeconds = ((int)opts.Window.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+            rl.OnRejected = (ctx, _) =>
             {
-                if (ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-                {
-                    ctx.HttpContext.Response.Headers.RetryAfter =
-                        ((int)retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
-                }
+                // RFC 6585 §3 mandates Retry-After on 429. Sliding/fixed-window limiters only
+                // populate the lease metadata when there's a queue; fall back to the window so
+                // the header is present unconditionally.
+                var seconds = ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter)
+                    ? ((int)retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture)
+                    : fallbackRetryAfterSeconds;
+                ctx.HttpContext.Response.Headers.RetryAfter = seconds;
                 return ValueTask.CompletedTask;
             };
 

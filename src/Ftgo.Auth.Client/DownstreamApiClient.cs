@@ -22,13 +22,13 @@ public sealed partial class DownstreamApiClient(
         string scope,
         CancellationToken cancellationToken)
     {
-        var token = await tokenProvider.GetAccessTokenAsync(scope, cancellationToken);
+        var token = await tokenProvider.GetAccessTokenAsync(scope, cancellationToken).ConfigureAwait(false);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        using var response = await http.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
         LogProbe(logger, (int)response.StatusCode, path);
 

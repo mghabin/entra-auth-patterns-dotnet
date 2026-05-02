@@ -71,18 +71,18 @@ Token-forging helpers (signed by a test JWKS) and ready-made negative-test fixtu
 
 ## Library vs Service — decision rationale
 
-| Concern | Shared library + IaC (recommended) | Shared auth service (the proposal) |
-|---|---|---|
-| Solves duplication across 20 services | ✅ One implementation, semver'd | ✅ Only if every service migrates *and stays migrated* |
-| Solves drift across 10 products | ✅ Defaults + lint enforce standards | ⚠️ Standards leak into bespoke proxy logic |
-| Runtime cost | None — in-process, JWKS cached | +1 hop per request; p99 hit; SPOF when it hiccups |
-| Operational cost | Owned like any internal NuGet | New tier-0 service: capacity, on-call, regional HA, DR |
-| Conway's-law risk | Low — teams self-serve via package upgrade | High — every product's auth change queues behind one team |
-| Token re-issuance temptation | None | Inevitable — you become an IdP |
-| OBO / delegated downstream | Lives in the calling service, supported by lib helpers | **Cannot** be centralized — needs the calling service's credential & audience |
-| Cross-product S2S | App tokens with `roles`, validated locally; lib handles boilerplate | The proxy adds nothing |
-| Failure blast radius | Bad release rolled back per-service, gradual canary | Auth service down ⇒ every product down |
-| Rollout | Canary one service, fan out; pin versions per product | Big-bang or risky dual-stack |
+| Concern                               | Shared library + IaC (recommended)                                  | Shared auth service (the proposal)                                            |
+| ------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Solves duplication across 20 services | ✅ One implementation, semver'd                                      | ✅ Only if every service migrates *and stays migrated*                         |
+| Solves drift across 10 products       | ✅ Defaults + lint enforce standards                                 | ⚠️ Standards leak into bespoke proxy logic                                    |
+| Runtime cost                          | None — in-process, JWKS cached                                      | +1 hop per request; p99 hit; SPOF when it hiccups                             |
+| Operational cost                      | Owned like any internal NuGet                                       | New tier-0 service: capacity, on-call, regional HA, DR                        |
+| Conway's-law risk                     | Low — teams self-serve via package upgrade                          | High — every product's auth change queues behind one team                     |
+| Token re-issuance temptation          | None                                                                | Inevitable — you become an IdP                                                |
+| OBO / delegated downstream            | Lives in the calling service, supported by lib helpers              | **Cannot** be centralized — needs the calling service's credential & audience |
+| Cross-product S2S                     | App tokens with `roles`, validated locally; lib handles boilerplate | The proxy adds nothing                                                        |
+| Failure blast radius                  | Bad release rolled back per-service, gradual canary                 | Auth service down ⇒ every product down                                        |
+| Rollout                               | Canary one service, fan out; pin versions per product               | Big-bang or risky dual-stack                                                  |
 
 The library approach gives you everything you wanted (one authoritative implementation) without inheriting the downsides of a runtime auth service.
 
