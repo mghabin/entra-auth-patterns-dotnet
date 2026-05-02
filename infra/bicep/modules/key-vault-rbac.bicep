@@ -13,7 +13,7 @@ param principalIds array
 // Reference: https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#key-vault-secrets-user
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 
-resource kv 'Microsoft.KeyVault/vaults@2024-04-01-preview' existing = {
+resource kv 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: keyVaultName
 }
 

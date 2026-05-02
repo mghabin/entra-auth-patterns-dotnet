@@ -29,22 +29,12 @@ param tags object = {}
 @description('Resolved Entra wiring (tenantId, app reg appIds, kitchen-worker MI clientId, downstream FQDNs). Empty `{}` on cold deploy → no Entra env vars are injected and apps fall back to appsettings.json placeholders. Populated by scripts/provision-apps.sh after Entra app regs and worker MI are known.')
 param entraConfig object = {}
 
-// REQUIRED ORDER: services[0]=apiGateway, services[1]=ordersApi,
-//                 services[2]=restaurantsApi, services[3]=kitchenWorker.
-// The `services` output below indexes containerApps[] positionally because
-// Bicep does not allow for-expressions inside `toObject(...)` for output
-// values (BCP138) AND vars cannot reference module outputs (BCP182). Until
-// that limitation is lifted (tracked as a follow-up to migrate to a true
-// keyed-map output), callers MUST preserve both the length AND the order
-// of the default array — overriding with a different ordering will silently
-// produce a mis-keyed `services` map (e.g. apiGateway.fqdn pointing at the
-// orders-api ingress). Bicep has no `assert` keyword, so this constraint
-// is enforced by convention + review, not at template-evaluation time.
-@description('Service definitions. project = csproj folder name; shortName = lowercase image/name suffix; key = stable Bicep map key (camelCase) used to dispatch env vars and build the output map; isWebApp = whether to expose HTTP ingress + /health/live + /health/ready probes. REQUIRED ORDER: [0]=apiGateway, [1]=ordersApi, [2]=restaurantsApi, [3]=kitchenWorker — the `services` output is positionally keyed against this ordering. Do NOT reorder or resize without also rewriting the `services` output map below.')
+// REQUIRED ORDER: see `requiredOrder` in `services` param metadata below.
+// The output map is positionally keyed; reordering breaks downstream wiring.
+@description('Service definitions. project = csproj folder; shortName = lowercase image suffix; key = camelCase Bicep map key; isWebApp = expose HTTP ingress + probes. Position-keyed against the `services` output — preserve order and length.')
 @metadata({
   requiredOrder:    [ 'apiGateway', 'ordersApi', 'restaurantsApi', 'kitchenWorker' ]
   requiredLength:   4
-  orderingConstraint: 'The `services` output below is positionally keyed against this array (containerApps[0]=apiGateway, etc). Reordering or resizing produces a silently mis-keyed output — do not override unless you also rewrite the output map.'
 })
 param services array = [
   { project: 'Ftgo.ApiGateway',      shortName: 'apigateway',       key: 'apiGateway',     isWebApp: true  }

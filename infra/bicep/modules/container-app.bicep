@@ -47,7 +47,7 @@ param extraEnvVars array = []
 
 var aspNetCoreEnvironment = '${toUpper(substring(environmentName, 0, 1))}${substring(environmentName, 1)}'
 
-resource app 'Microsoft.App/containerApps@2024-10-02-preview' = {
+resource app 'Microsoft.App/containerApps@2025-07-01' = {
   name:     appName
   location: location
   tags:     tags

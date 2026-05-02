@@ -3,6 +3,8 @@ using Ftgo.Auth;
 using Microsoft.Identity.Web;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureEntraAuthKestrel();
+builder.Services.AddEntraAuthHttpsRedirection();
 
 builder.Services.AddEntraAuth(builder.Configuration, auth =>
 {
@@ -23,8 +25,7 @@ builder.Services.AddEntraAuthForwardedHeaders();
 
 var app = builder.Build();
 app.UseForwardedHeaders();
-// API gateway serves the Scalar HTML UI; use the Scalar-friendly CSP preset so inline scripts/styles
-// + the in-browser Auth Code + PKCE call to login.microsoftonline.com are not blocked.
+app.UseHttpsRedirection();
 app.UseEntraAuthSecurityHeaders(EntraAuthSecurityHeaderOptions.ScalarFriendly());
 app.UseEntraAuthProblemDetails();
 app.UseAuthentication();

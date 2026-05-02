@@ -1,18 +1,11 @@
 metadata name = 'app-registrations'
 metadata description = 'Provisions the 3 FTGO Entra app registrations + service principals (BFF, Orders API, Restaurants API) and exposes deterministic scope/role IDs. Workers run as Managed Identity and do not need their own app reg.'
 
-// IMPORTANT: bffMiClientId must NEVER be passed as empty on a re-run after the
-// initial warm deploy. The FIC resource depends on this value as its 'subject'.
-// If you re-run with an empty bffMiClientId, the FIC will be deleted, causing
-// the BFF to lose its trust relationship with the BFF UAMI. The bootstrap
-// flow (scripts/provision-apps.sh) must always pass the populated value.
-//
-// Cold-deploy semantics (bffMiClientId == '') are intentional and safe ONLY
-// before the BFF Container App + its system-assigned MI exist. Once the FIC
-// has been created, every subsequent tenant-scope deploy MUST resolve and
-// pass the BFF MI clientId or the Microsoft.Graph extension will reconcile
-// the FIC out of existence and break SignedAssertionFromManagedIdentity for
-// the BFF until the next provision-apps.sh run.
+// IMPORTANT: bffMiClientId must NEVER be empty after the BFF MI exists — the
+// Microsoft.Graph extension would reconcile the FIC out of existence and break
+// SignedAssertionFromManagedIdentity. Cold deploy passes '' intentionally;
+// scripts/provision-apps.sh handles the resolve+rerun. Recovery: re-run
+// provision-apps.sh. Full procedure: docs/operations.md § "CD identity (UAMI) recovery".
 
 // Scope/role IDs are deterministic GUIDs of (tenantId, app, value) so callers' references survive re-deploys.
 

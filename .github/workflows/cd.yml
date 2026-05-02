@@ -45,6 +45,7 @@ jobs:
   build-images:
     if: github.event_name == 'push' || github.event.inputs.imageTag == ''
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -153,6 +154,7 @@ jobs:
       always() &&
       (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     outputs:
       imageTag: ${{ steps.tag.outputs.imageTag }}
     steps:
@@ -184,7 +186,8 @@ jobs:
     with:
       environment: ci
       image_tag: ${{ needs.resolve-image-tag.outputs.imageTag }}
-    secrets: inherit
+    secrets:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
 
   deploy-ppe:
     needs: [resolve-image-tag, deploy-ci]
@@ -200,7 +203,8 @@ jobs:
     with:
       environment: ppe
       image_tag: ${{ needs.resolve-image-tag.outputs.imageTag }}
-    secrets: inherit
+    secrets:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
 
   deploy-prod:
     needs: [resolve-image-tag, deploy-ppe]
@@ -215,4 +219,5 @@ jobs:
     with:
       environment: prod
       image_tag: ${{ needs.resolve-image-tag.outputs.imageTag }}
-    secrets: inherit
+    secrets:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
