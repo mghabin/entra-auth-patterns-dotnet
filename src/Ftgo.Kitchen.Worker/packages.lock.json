@@ -67,9 +67,9 @@
       },
       "Microsoft.Identity.Client": {
         "type": "Direct",
-        "requested": "[4.83.3, )",
-        "resolved": "4.83.3",
-        "contentHash": "XNJJn5uctuGvl3u6qzAof2TNysAZ/PPVKzkAglxvTO5XHgff/Ibs1+yi2G26Xrf6X/f780kS4fMKKdHcGb96hQ==",
+        "requested": "[4.85.0, )",
+        "resolved": "4.85.0",
+        "contentHash": "6Ygh1H8f2nzip3rcdYMjGXb3dOS7x0a+bUtH8O9u1CVRAjJjoIIo8wa/cgZW0w1vzF2pqfLCVF+ZHaAhIX95AA==",
         "dependencies": {
           "Microsoft.IdentityModel.Abstractions": "8.14.0"
         }
