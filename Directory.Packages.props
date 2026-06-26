@@ -43,8 +43,8 @@
   </ItemGroup>
 
   <ItemGroup Label="Analyzers">
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.58" />
-    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.25.0.139117" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.114" />
+    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.27.0.140913" />
     <PackageVersion Include="Roslynator.Analyzers" Version="4.15.0" />
     <PackageVersion Include="AsyncFixer" Version="2.1.0" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.203" />
