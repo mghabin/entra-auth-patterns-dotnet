@@ -19,9 +19,9 @@
       },
       "Meziantou.Analyzer": {
         "type": "Direct",
-        "requested": "[3.0.58, )",
-        "resolved": "3.0.58",
-        "contentHash": "EWprZh8ONB5W4T5lajB9H3/ThznWgEVbb8sWkIZe2ZOCRPPzAdLxkFfM8z57SosJtUYGxPXvxlqGmClxw8mA9g=="
+        "requested": "[3.0.122, )",
+        "resolved": "3.0.122",
+        "contentHash": "bmo+TIK9fLG/NzlZ2Qi5lto2jG/N6/zmc7gDVp5uzvVmnDKMV5SmUR7jToSbx/oqTPMV3ajyCmo2kFBdPDlU0A=="
       },
       "Microsoft.Extensions.Configuration.Json": {
         "type": "Direct",
@@ -93,9 +93,9 @@
       },
       "SonarAnalyzer.CSharp": {
         "type": "Direct",
-        "requested": "[10.25.0.139117, )",
-        "resolved": "10.25.0.139117",
-        "contentHash": "2iBZIkcgsaUNyIPFqR9ECv5PLbAwV9I/v/PeEiMdkfhWEAnqD7VyNXzukQDlL/D24f5OoUc4MbWF5SgYI7x3CA=="
+        "requested": "[10.29.0.143774, )",
+        "resolved": "10.29.0.143774",
+        "contentHash": "YOBCHTjqb4ak7yjLQhQJ6S0+aTkgnuMcekjCrhWruyIIoWlB1C8W+Fgr18bWit+xx7Gd9sNl5sziOwh6D804Hg=="
       },
       "Azure.Core": {
         "type": "Transitive",
