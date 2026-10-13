@@ -1,6 +1,6 @@
 # Shared Auth Platform across Products & Services
 
-*Audience: staff engineers, product tech leads, platform team. Context: ~10 products, ~20 services on shared AKS infra, with some cross-service calls. Each service today carries its own auth middleware.*
+*Audience: staff engineers, product tech leads, platform team. Context (a hypothetical organisation used as a worked example, not a description of any real company's systems): ~10 products, ~20 services on shared AKS infra, with some cross-service calls. Each service today carries its own auth middleware.*
 
 ## The real problem
 Surface form: *"Can we centralize auth into one layer for all services?"*
@@ -86,7 +86,7 @@ Token-forging helpers (signed by a test JWKS) and ready-made negative-test fixtu
 
 The library approach gives you everything you wanted (one authoritative implementation) without inheriting the downsides of a runtime auth service.
 
-## Education-domain specifics
+## Example domain: an education platform
 - **Two user populations**: staff/admins (Entra **workforce**) vs students/parents (Entra **External ID** / B2C, or SAML/OIDC federation through Clever/ClassLink). The library supports **multiple identity providers per product** via named `JwtBearer` schemes, with policies selecting the right scheme per route.
 - **Multi-tenant by district/university**: `TenantId: organizations` for staff; tenant onboarding/offboarding becomes a single config change propagated to both edge and library.
 - **Compliance** (FERPA / COPPA / GDPR / regional residency): centralized claim logging via the library makes audits straightforward. Raw tokens never logged.
